@@ -1,4 +1,5 @@
 import argparse
+import datetime
 
 from HyperParameter import HyperParameters
 from Trainer import Trainer
@@ -40,11 +41,14 @@ def make_hp(args) -> HyperParameters:
     return hp
 
 def train(args):
+    start_time = datetime.datetime.now()
     hp = make_hp(args)
     experiment_name = f'{args.env}_{"LSTM" if args.use_lstm else "NoLSTM"}_{"NoVelocity" if args.mask_velocity else "Velocity"}_noise{args.noise}'
     trainer = Trainer(args.env, args.mask_velocity, experiment_name, hp)
     score = trainer.train()
-    print(score)
+    end_time = datetime.datetime.now()
+    print("max reward: ", score)
+    print("spend time: ", (end_time-start_time).seconds)
 
 
 if __name__ == "__main__":
