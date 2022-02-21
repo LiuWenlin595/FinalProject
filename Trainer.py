@@ -31,8 +31,8 @@ class Trainer:
         self.base_checkpoint_path = f'{workspace_path}/checkpoints/{experiment_name}/'
         self.checkpoint_frequency = checkpoint_frequency
         
-        self.train_device = "cuda" if torch.cuda.is_available() else "cpu"
-        self.gather_device = "cuda" if torch.cuda.is_available() and not force_cpu_gather else "cpu"
+        self.train_device = "cuda:0" if torch.cuda.is_available() else "cpu"
+        self.gather_device = "cuda:0" if torch.cuda.is_available() and not force_cpu_gather else "cpu"
         self.min_reward_values = torch.full([hp.parallel_rollouts], hp.min_reward)
         self.asynchronous_environment = asynchronous_environment
         self.start_or_resume_from_checkpoint()
@@ -43,6 +43,8 @@ class Trainer:
         # Vector environment manages multiple instances of the environment.
         # A key difference between this and the standard gym environment is it automatically resets.
         # Therefore when the done flag is active in the done vector the corresponding state is the first new state.
+        # 矢量化环境和标准gym环境一大不同就是会自动reset, 所以子环境的done生效时对应的state是reset后的初始状态
+        # 子环境是并行还是串行, 因为电脑跑不起来很多线程所以区别不大
         self.env = gym.vector.make(self.env_name, self.hp.parallel_rollouts, asynchronous=self.asynchronous_environment)
         if self.mask_velocity:
             self.env = MaskVelocityWrapper(self.env)
@@ -56,7 +58,8 @@ class Trainer:
         np.random.seed(RANDOM_SEED)
         torch.set_num_threads(8)
 
-   
+
+    # 通过checkpoint恢复或初始化网络参数
     def start_or_resume_from_checkpoint(self):
         """
         Create actor, critic, actor optimizer and critic optimizer from scratch
@@ -94,6 +97,7 @@ class Trainer:
         self.iteration = max_checkpoint_iteration
     
     
+    # 计算累计折扣回报
     def calc_discounted_return(self, rewards, discount, final_value):
         """
         Calculate discounted returns based on rewards and discount factor.
@@ -106,19 +110,21 @@ class Trainer:
         return discounted_returns
 
 
+    # 计算GAE
     def compute_advantages(self, rewards, values, discount, gae_lambda):
         """
         Compute General Advantage.
         """
         deltas = rewards + discount * values[1:] - values[:-1]
         seq_len = len(rewards)
-        advs = torch.zeros(seq_len + 1)
+        advs = torch.zeros(seq_len + 1)     # 最后额外填充一个A值, 便于规范公式 
         multiplier = discount * gae_lambda
-        for i in range(seq_len - 1, -1 , -1):
+        for i in range(seq_len - 1, -1, -1):
             advs[i] = advs[i + 1] * multiplier  + deltas[i]
         return advs[:-1]
 
 
+    # 矢量化环境执行step, 获取所有子环境的traj
     def gather_trajectories(self) ->  Dict[str, torch.Tensor]:
         """
         Gather policy trajectories from gym environment.
@@ -126,7 +132,7 @@ class Trainer:
         
         # Initialise variables.
         obsv = self.env.reset()
-        trajectory_data = {"states": [],
+        trajectory_data = {"states": [],  # shape = [rollout_steps, parallel_rollouts] 或 [rollout_steps, parallel_rollouts, dim]
                     "actions": [],
                     "action_probabilities": [],
                     "rewards": [],
@@ -145,7 +151,6 @@ class Trainer:
             self.critic.get_init_state(self.hp.parallel_rollouts, self.gather_device)
             # Take 1 additional step in order to collect the state and value for the final state.
             for i in range(self.hp.rollout_steps):
-                # TODO, 下一步看actor和critic的hidden cell
                 trajectory_data["actor_hidden_states"].append(self.actor.hidden_cell[0].squeeze(0).cpu())
                 trajectory_data["actor_cell_states"].append(self.actor.hidden_cell[1].squeeze(0).cpu())
                 trajectory_data["critic_hidden_states"].append(self.critic.hidden_cell[0].squeeze(0).cpu())
@@ -179,11 +184,12 @@ class Trainer:
             # Future value for terminal episodes is 0.
             trajectory_data["values"].append(value.squeeze(1).cpu() * (1 - terminal))
 
-        # Combine step lists into tensors.
+        # stack把list的子环境数据整合成大的tensor
         trajectory_tensors = {key: torch.stack(value) for key, value in trajectory_data.items()}
         return trajectory_tensors
 
 
+    # 将所有子环境的traj根据episode切割, 并整合到一起
     def split_trajectories_episodes(self, trajectory_tensors: Dict[str, torch.Tensor]):
         """
         Split trajectories by episode.
@@ -191,11 +197,11 @@ class Trainer:
 
         len_episodes = []
         trajectory_episodes = {key: [] for key in trajectory_tensors.keys()}
-        for i in range(self.hp.parallel_rollouts):
+        for i in range(self.hp.parallel_rollouts):  # 对每一个worker产生的traj切割
             terminals_tmp = trajectory_tensors["terminals"].clone()
-            terminals_tmp[0, i] = 1
+            terminals_tmp[0, i] = 1     # 每一段traj的第一个位置和最后一个位置设为terminal
             terminals_tmp[-1, i] = 1
-            split_points = (terminals_tmp[:, i] == 1).nonzero() + 1
+            split_points = (terminals_tmp[:, i] == 1).nonzero() + 1 # 找到切割点
 
             split_lens = split_points[1:] - split_points[:-1]
             split_lens[0] += 1
@@ -205,16 +211,17 @@ class Trainer:
             for key, value in trajectory_tensors.items():
                 # Value includes additional step.
                 if key == "values":
-                    value_split = list(torch.split(value[:, i], len_episode[:-1] + [len_episode[-1] + 1]))
+                    value_split = list(torch.split(value[:, i], len_episode[:-1] + [len_episode[-1] + 1]))  # 最后一个episode额外补上一个value
                     # Append extra 0 to values to represent no future reward.
-                    for j in range(len(value_split) - 1):
+                    for j in range(len(value_split) - 1):  # 给之前的episode填充额外的0表示没有未来奖励
                         value_split[j] = torch.cat((value_split[j], torch.zeros(1)))
                     trajectory_episodes[key] += value_split
                 else:
                     trajectory_episodes[key] += torch.split(value[:, i], len_episode)
-        return trajectory_episodes, len_episodes
+        return trajectory_episodes, len_episodes    # shape = [episode个数, dim], [episode个数]里面存的每个episode的长度
 
 
+    # 把长度小于rollout_steps的episode都用0扩充到规定长度, 然后计算每个episode的A值和G值
     def pad_and_compute_returns(self, trajectory_episodes, len_episodes):
 
         """
@@ -237,6 +244,7 @@ class Trainer:
                 else:
                     padding = torch.zeros(self.hp.rollout_steps - len_episodes[i], dtype=value[i].dtype)
                 padded_trajectories[key].append(torch.cat((value[i], padding)))
+            # TODO, 继续看两个子函数
             padded_trajectories["advantages"].append(torch.cat((self.compute_advantages(rewards=trajectory_episodes["rewards"][i],
                                                             values=trajectory_episodes["values"][i],
                                                             discount=self.hp.discount,
@@ -246,12 +254,15 @@ class Trainer:
                                                                         final_value=trajectory_episodes["values"][i][-1]), single_padding)))
         return_val = {k: torch.stack(v) for k, v in padded_trajectories.items()} 
         return_val["seq_len"] = torch.tensor(len_episodes)
-        
+
         return return_val 
 
 
     def train(self):
-        print("hunky, ", torch.cuda.is_available())
+        print(torch.cuda.is_available())
+        print(torch.cuda.device_count())
+        print(torch.cuda.current_device())
+        print(torch.cuda.get_device_name(0))
         while self.iteration < self.hp.max_iterations:      
 
             self.actor = self.actor.to(self.gather_device)
@@ -263,9 +274,11 @@ class Trainer:
             trajectory_episodes, len_episodes = self.split_trajectories_episodes(trajectory_tensors)
             trajectories = self.pad_and_compute_returns(trajectory_episodes, len_episodes)
 
-            # Calculate mean reward.
+            # 统计一共有多少明确terminal的episode
             complete_episode_count = trajectories["terminals"].sum().item()
+            # 只统计有明确terminal标识的episode的true_reward总和
             terminal_episodes_rewards = (trajectories["terminals"].sum(axis=1) * trajectories["true_rewards"].sum(axis=1)).sum()
+            # 计算episode的mean reward
             mean_reward =  terminal_episodes_rewards / complete_episode_count
 
             # Check stop conditions.
@@ -288,12 +301,13 @@ class Trainer:
             self.critic = self.critic.to(self.train_device)
 
             # Train actor and critic. 
-            for epoch_idx in range(self.hp.ppo_epochs): 
-                for batch in trajectory_dataset:
+            for epoch_idx in range(self.hp.ppo_epochs):
+                # 把trajectories中的所有足够batch_len长度的episode片段都遍历一遍 
+                for batch in trajectory_dataset:   
                     # Get batch 
                     self.actor.hidden_cell = (batch.actor_hidden_states[:1], batch.actor_cell_states[:1])
                     
-                    # Update actor
+                    # Update actor   # TODO, 只用了batch_len最后一个的数据？ (-1)
                     self.actor_optimizer.zero_grad()
                     action_dist = self.actor(batch.states)
                     # Action dist runs on cpu as a workaround to CUDA illegal memory access.
@@ -305,7 +319,7 @@ class Trainer:
                     surrogate_loss_2 = action_dist.entropy().to(self.train_device)
                     actor_loss = -torch.mean(torch.min(surrogate_loss_0, surrogate_loss_1)) - torch.mean(self.hp.entropy_factor * surrogate_loss_2)
                     actor_loss.backward() 
-                    torch.nn.utils.clip_grad.clip_grad_norm_(self.actor.parameters(), self.hp.max_grad_norm)
+                    torch.nn.utils.clip_grad.clip_grad_norm_(self.actor.parameters(), self.hp.max_grad_norm)  # 如果所有参数的gradient组成的向量的L2范数大于max norm, 那么需要根据L2范数/max norm进行缩放
                     self.actor_optimizer.step()
 
                     # Update critic

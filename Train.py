@@ -29,9 +29,9 @@ def make_hp(args) -> HyperParameters:
         hp = HyperParameters(parallel_rollouts=8, rollout_steps=2048, batch_size=256, patience=1000, entropy_factor=1e-4,
                             init_log_std_dev=-1., trainable_std_dev=True, min_reward=-1.)
                             #init_log_std_dev=1., trainable_std_dev=True)
-    elif args.env == "BipedalWalkerHardcore-v2" and not args.mask_velocity:
+    elif args.env == "BipedalWalkerHardcore-v3" and not args.mask_velocity:
         # Working :-D
-        hp = HyperParameters(batch_size=1024, parallel_rollouts=32, recurrent_seq_len=8, rollout_steps=2048, patience=10000, entropy_factor=1e-4, 
+        hp = HyperParameters(batch_size=1024, parallel_rollouts=32, recurrent_seq_len=8, rollout_steps=2048, patience=500, entropy_factor=1e-4,  # 10000 
                             init_log_std_dev=-1., trainable_std_dev=True, min_reward=-1., hidden_size=256)
     else:
         raise NotImplementedError
@@ -53,10 +53,10 @@ def train(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("-e", "--env", type=str, default='CartPole-v1')
-    parser.add_argument("-m", "--mask-velocity", action='store_true')
+    parser.add_argument("-e", "--env", type=str, default='BipedalWalkerHardcore-v3')
+    parser.add_argument("-m", "--mask-velocity", default=False)
     parser.add_argument("-n", "--name", type=str, default='experiment')
-    parser.add_argument("-R", "--use-lstm", action='store_true')
+    parser.add_argument("-R", "--use-lstm", default=False)
     parser.add_argument("--noise", type=float, default=0.0)
 
     args = parser.parse_args()
