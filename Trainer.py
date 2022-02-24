@@ -13,6 +13,9 @@ from TrajectoryDataset import TrajectoryDataset
 import time
 from torch.utils.tensorboard import SummaryWriter
 
+import pynvml
+pynvml.nvmlInit()
+
 class Trainer:
     def __init__(self,
                  env_name: str,
@@ -35,7 +38,13 @@ class Trainer:
         self.gather_device = "cuda:0" if torch.cuda.is_available() and not force_cpu_gather else "cpu"
         self.min_reward_values = torch.full([hp.parallel_rollouts], hp.min_reward)
         self.asynchronous_environment = asynchronous_environment
+        handle = pynvml.nvmlDeviceGetHandleByIndex(0)
+        info = pynvml.nvmlDeviceGetMemoryInfo(handle)
+        print("hunky1, ", info.used / (1024 * 1024 * 1024))
         self.start_or_resume_from_checkpoint()
+        handle = pynvml.nvmlDeviceGetHandleByIndex(0)
+        info = pynvml.nvmlDeviceGetMemoryInfo(handle)
+        print("hunky2, ", info.used / (1024 * 1024 * 1024))
 
         self.best_reward = -1e6
         self.fail_to_improve_count = 0  # 没有提升的训练次数
@@ -56,7 +65,7 @@ class Trainer:
         RANDOM_SEED = 0
         torch.random.manual_seed(RANDOM_SEED)
         np.random.seed(RANDOM_SEED)
-        torch.set_num_threads(8)
+        # torch.set_num_threads(8)  # TODO, 禁掉看看能不能提高速度, 并且查一查这个到底对应CPU的哪个属性
 
 
     # 通过checkpoint恢复或初始化网络参数
@@ -83,7 +92,8 @@ class Trainer:
             
             assert env_name == self.env_name, "To resume training environment must match current settings."
             assert env_mask_velocity == self.mask_velocity, "To resume training model architecture must match current settings."
-            assert self.hp == hp, "To resume training hyperparameters must match current settings."
+            # TODO, 因为patience, 所以暂时关闭
+            # assert self.hp == hp, "To resume training hyperparameters must match current settings."
             # We have to move manually move optimizer states to TRAIN_DEVICE manually since optimizer doesn't yet have a "to" method.
             for state in self.actor_optimizer.state.values():
                 for k, v in state.items():
@@ -186,7 +196,7 @@ class Trainer:
 
         # stack把list的子环境数据整合成大的tensor
         trajectory_tensors = {key: torch.stack(value) for key, value in trajectory_data.items()}
-        return trajectory_tensors
+        return trajectory_tensors  # shape = [rollout_steps, parallel_rollouts, dim]
 
 
     # 将所有子环境的traj根据episode切割, 并整合到一起
@@ -218,7 +228,7 @@ class Trainer:
                     trajectory_episodes[key] += value_split
                 else:
                     trajectory_episodes[key] += torch.split(value[:, i], len_episode)
-        return trajectory_episodes, len_episodes    # shape = [episode个数, dim], [episode个数]里面存的每个episode的长度
+        return trajectory_episodes, len_episodes    # shape = [episode个数, episode长度, dim], [episode个数]里面存的每个episode的长度
 
 
     # 把长度小于rollout_steps的episode都用0扩充到规定长度, 然后计算每个episode的A值和G值
@@ -244,7 +254,6 @@ class Trainer:
                 else:
                     padding = torch.zeros(self.hp.rollout_steps - len_episodes[i], dtype=value[i].dtype)
                 padded_trajectories[key].append(torch.cat((value[i], padding)))
-            # TODO, 继续看两个子函数
             padded_trajectories["advantages"].append(torch.cat((self.compute_advantages(rewards=trajectory_episodes["rewards"][i],
                                                             values=trajectory_episodes["values"][i],
                                                             discount=self.hp.discount,
@@ -255,14 +264,11 @@ class Trainer:
         return_val = {k: torch.stack(v) for k, v in padded_trajectories.items()} 
         return_val["seq_len"] = torch.tensor(len_episodes)
 
-        return return_val 
-
+        return return_val   # shape = [episode个数, rollout_steps, dim]
+ 
 
     def train(self):
-        print(torch.cuda.is_available())
-        print(torch.cuda.device_count())
-        print(torch.cuda.current_device())
-        print(torch.cuda.get_device_name(0))
+        print(torch.cuda.is_available(), torch.cuda.get_device_name(0))
         while self.iteration < self.hp.max_iterations:      
 
             self.actor = self.actor.to(self.gather_device)
@@ -291,14 +297,25 @@ class Trainer:
             if self.fail_to_improve_count > self.hp.patience:
                 print(f"Policy has not yielded higher reward for {self.hp.patience} iterations...  Stopping now.")
                 break
+            handle = pynvml.nvmlDeviceGetHandleByIndex(0)
+            info = pynvml.nvmlDeviceGetMemoryInfo(handle)
+            print("hunky3, ", info.used / (1024 * 1024 * 1024))
 
+            print(trajectories["states"].size())
             trajectory_dataset = TrajectoryDataset(trajectories, batch_size=self.hp.batch_size,
                                             device=self.train_device, batch_len=self.hp.recurrent_seq_len, rollout_steps=self.hp.rollout_steps)
             end_gather_time = time.time()
             start_train_time = time.time()
+
+            handle = pynvml.nvmlDeviceGetHandleByIndex(0)
+            info = pynvml.nvmlDeviceGetMemoryInfo(handle)
+            print("hunky4, ", info.used / (1024 * 1024 * 1024))
             
             self.actor = self.actor.to(self.train_device)
             self.critic = self.critic.to(self.train_device)
+            handle = pynvml.nvmlDeviceGetHandleByIndex(0)
+            info = pynvml.nvmlDeviceGetMemoryInfo(handle)
+            print("hunky5, ", info.used / (1024 * 1024 * 1024))
 
             # Train actor and critic. 
             for epoch_idx in range(self.hp.ppo_epochs):
@@ -330,6 +347,16 @@ class Trainer:
                     torch.nn.utils.clip_grad.clip_grad_norm_(self.critic.parameters(), self.hp.max_grad_norm)
                     critic_loss.backward() 
                     self.critic_optimizer.step()
+
+            handle = pynvml.nvmlDeviceGetHandleByIndex(0)
+            info = pynvml.nvmlDeviceGetMemoryInfo(handle)
+            print("hunky6, ", info.used / (1024 * 1024 * 1024))
+
+            torch.cuda.empty_cache()
+
+            handle = pynvml.nvmlDeviceGetHandleByIndex(0)
+            info = pynvml.nvmlDeviceGetMemoryInfo(handle)
+            print("hunky7, ", info.used / (1024 * 1024 * 1024))
                     
             end_train_time = time.time()
             print(f"Iteration: {self.iteration},  Mean reward: {mean_reward}, Mean Entropy: {torch.mean(surrogate_loss_2)}, " +
@@ -345,7 +372,7 @@ class Trainer:
             # if SAVE_PARAMETERS_TENSORBOARD:
             #     save_parameters(writer, "actor", actor, iteration)
             #     save_parameters(writer, "value", critic, iteration)
-            if self.iteration % self.checkpoint_frequency == 0: 
+            if self.iteration % self.checkpoint_frequency == 0:  # TODO, 下次训练改成100
                 save_checkpoint(self.base_checkpoint_path, self.actor, self.critic, self.actor_optimizer, self.critic_optimizer, self.iteration, self.hp, self.env_name, self.mask_velocity)
             self.iteration += 1
             

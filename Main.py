@@ -3,6 +3,8 @@ import datetime
 
 from HyperParameter import HyperParameters
 from Trainer import Trainer
+from Tester import Tester
+
 
 def make_hp(args) -> HyperParameters:
     if args.env == "CartPole-v1" and args.mask_velocity:
@@ -19,7 +21,7 @@ def make_hp(args) -> HyperParameters:
         # Works well.
         hp = HyperParameters(parallel_rollouts=32, rollout_steps=1024, batch_size=512, recurrent_seq_len=8, patience=1000) 
     elif args.env == "LunarLanderContinuous-v2" and args.mask_velocity:
-        # Works well.
+        # Works well. 
         hp = HyperParameters(parallel_rollouts=32, rollout_steps=1024, batch_size=1024, recurrent_seq_len=8, trainable_std_dev=True,  patience=200)
     elif args.env == "LunarLanderContinuous-v2" and not args.mask_velocity:
         # Works well.
@@ -31,14 +33,15 @@ def make_hp(args) -> HyperParameters:
                             #init_log_std_dev=1., trainable_std_dev=True)
     elif args.env == "BipedalWalkerHardcore-v3" and not args.mask_velocity:
         # Working :-D
-        hp = HyperParameters(batch_size=1024, parallel_rollouts=32, recurrent_seq_len=8, rollout_steps=2048, patience=500, entropy_factor=1e-4,  # 10000 
+        hp = HyperParameters(batch_size=1024, parallel_rollouts=16, recurrent_seq_len=8, rollout_steps=1024, patience=2000, entropy_factor=1e-4, 
                             init_log_std_dev=-1., trainable_std_dev=True, min_reward=-1., hidden_size=256)
     else:
-        raise NotImplementedError
+        raise NotImplementedError  
     
     hp.use_lstm = args.use_lstm
     hp.noise = args.noise
     return hp
+
 
 def train(args):
     start_time = datetime.datetime.now()
@@ -49,6 +52,19 @@ def train(args):
     end_time = datetime.datetime.now()
     print("max reward: ", score)
     print("spend time: ", (end_time-start_time).seconds)
+    print("end time: ", datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+
+
+def test(args):
+    start_time = datetime.datetime.now()
+    hp = make_hp(args)
+    experiment_name = f'{args.env}_{"LSTM" if args.use_lstm else "NoLSTM"}_{"NoVelocity" if args.mask_velocity else "Velocity"}_noise{args.noise}'
+    tester = Tester(args.env, args.mask_velocity, experiment_name, hp)
+    score = tester.test()
+    end_time = datetime.datetime.now()
+    print("test reward: ", score)
+    print("spend time: ", (end_time-start_time).seconds)
+    print("end time: ", datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
 
 
 if __name__ == "__main__":
@@ -62,3 +78,4 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     train(args)
+    # test(args)

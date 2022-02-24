@@ -77,7 +77,8 @@ def load_from_checkpoint(base_checkpoint_path: str, iteration: int, map_loacatio
     
     actor_optimizer = torch.optim.AdamW(actor.parameters(), lr=hp.actor_learning_rate)
     critic_optimizer = torch.optim.AdamW(critic.parameters(), lr=hp.critic_learning_rate)
-
+    
+    # 从预训练模型中加载权重
     actor.load_state_dict(actor_state_dict, strict=True) 
     critic.load_state_dict(critic_state_dict, strict=True)
     actor_optimizer.load_state_dict(actor_optimizer_state_dict)
