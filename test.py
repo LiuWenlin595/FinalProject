@@ -1,6 +1,7 @@
-from cmath import inf
 import numpy as np
-import pynvml
-import datetime
-
-print("end time: ", datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+ 
+a = np.array([[[1],[2],[3]], [[4],[5],[6]],[[7],[8],[9]]])
+print(a.shape)
+c = a[[0, 0], [[1, 1], [2, 2], [0, 0]]]
+print(c)
+print(c.shape)

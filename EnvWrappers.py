@@ -1,8 +1,8 @@
-from re import match
 import gym
 from gym.vector.vector_env import VectorEnv
 import numpy as np
 
+# 修饰类, 用于mask掉状态中的速度项, 从而制造部分可观察的马尔可夫决策过程
 class MaskVelocityWrapper(gym.ObservationWrapper):
     """
     Gym environment observation wrapper used to mask velocity terms in
@@ -32,11 +32,8 @@ class MaskVelocityWrapper(gym.ObservationWrapper):
         return  observation * self.mask
 
 
+# 修饰类, 对环境添加一定噪声, 验证算法的鲁棒性, 并且也可以构成一定程度的部分可观察
 class PerturbationWrapper(gym.ObservationWrapper):
-    """
-    Gym environment observation wrapper used to mask velocity terms in
-    observations. The intention is the make the MDP partially observatiable.
-    """
     def __init__(self, env: gym.Env, sigma: float):
         super(PerturbationWrapper, self).__init__(env)
         self.sigma = sigma

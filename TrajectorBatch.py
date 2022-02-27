@@ -3,9 +3,7 @@ import torch
 
 @dataclass
 class TrajectorBatch():
-    """
-    Dataclass for storing data batch.
-    """
+    # 存储batch的数据类
     states: torch.tensor
     actions: torch.tensor
     action_probabilities: torch.tensor

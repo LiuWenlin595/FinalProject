@@ -9,13 +9,8 @@ from dotmap import DotMap
 import pathlib
 
 
+# 得到checkpoint最后的iteration次数
 def get_last_checkpoint_iteration(base_checkpoint_path: str) -> int:
-    """Determine latest checkpoint iteration.
-
-    Parameters
-    ----------
-    base_checkpoint_path : str
-    """
     if os.path.isdir(base_checkpoint_path):
         max_checkpoint_iteration = max([int(dirname) for dirname in os.listdir(base_checkpoint_path)])
     else:
@@ -23,18 +18,8 @@ def get_last_checkpoint_iteration(base_checkpoint_path: str) -> int:
     return max_checkpoint_iteration
 
 
+# 返回checkpoint中的模型和参数
 def load_checkpoint(base_checkpoint_path: str, iteration: int, map_loacation: Optional[str] = None):
-    """
-    Load from training checkpoint.
-
-    Parameters
-    ----------
-    base_checkpoint_path : str
-    
-    itration: int
-    
-    map_location: str, optional
-    """
     base_checkpoint = base_checkpoint_path + f"{iteration}/"
     with open(base_checkpoint + "parameters.pt", "rb") as f:
         checkpoint = pickle.load(f)
@@ -50,10 +35,8 @@ def load_checkpoint(base_checkpoint_path: str, iteration: int, map_loacation: Op
            checkpoint.hp, checkpoint.env, checkpoint.env_mask_velocity)
 
 
+# 得到gym_env的基本状态空间和动作空间
 def get_env_space(env_name: str):
-    """
-    Return obsvervation dimensions, action dimensions and whether or not action space is continuous.
-    """
     env = gym.make(env_name)
     continuous_action_space = type(env.action_space) is gym.spaces.box.Box
     if continuous_action_space:
@@ -64,6 +47,7 @@ def get_env_space(env_name: str):
     return obsv_dim, action_dim, continuous_action_space
 
 
+# 通过checkpoint中的模型和参数, 拷贝一个新的模型用于训练
 def load_from_checkpoint(base_checkpoint_path: str, iteration: int, map_loacation: Optional[str] = None):
     
     actor_state_dict, critic_state_dict, actor_optimizer_state_dict, critic_optimizer_state_dict, hp, env_name, env_mask_velocity = load_checkpoint(base_checkpoint_path, iteration, map_loacation)
@@ -84,7 +68,6 @@ def load_from_checkpoint(base_checkpoint_path: str, iteration: int, map_loacatio
     actor_optimizer.load_state_dict(actor_optimizer_state_dict)
     critic_optimizer.load_state_dict(critic_optimizer_state_dict)
 
-    # We have to move manually move optimizer states to TRAIN_DEVICE manually since optimizer doesn't yet have a "to" method.
     for state in actor_optimizer.state.values():
         for k, v in state.items():
             if isinstance(v, torch.Tensor):
@@ -98,11 +81,8 @@ def load_from_checkpoint(base_checkpoint_path: str, iteration: int, map_loacatio
     return actor, critic, actor_optimizer, critic_optimizer, hp, env_name, env_mask_velocity
 
 
-
+# 保存checkpoint
 def save_checkpoint(base_checkpoint_path: str, actor, critic, actor_optimizer, critic_optimizer, iteration, hp, env_name, env_mask_velocity):
-    """
-    Save training checkpoint.
-    """
     checkpoint = DotMap()
     checkpoint.env = env_name
     checkpoint.env_mask_velocity = env_mask_velocity 

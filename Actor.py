@@ -40,8 +40,7 @@ class Actor(nn.Module):
 
         if self.continuous_action_space:
             cov_matrix = self.covariance_eye.to(device).expand(batch_size, self.action_dim, self.action_dim) * torch.exp(self.log_std_dev.to(device))
-            # We define the distribution on the CPU since otherwise operations fail with CUDA illegal memory access error.
-            policy_dist = torch.distributions.multivariate_normal.MultivariateNormal(policy_logits_out.to("cpu"), cov_matrix.to("cpu"))
+            policy_dist = torch.distributions.multivariate_normal.MultivariateNormal(policy_logits_out.to(device), cov_matrix.to(device))
         else:
-            policy_dist = distributions.Categorical(F.softmax(policy_logits_out, dim=1).to("cpu"))
+            policy_dist = distributions.Categorical(F.softmax(policy_logits_out, dim=1).to(device))
         return policy_dist

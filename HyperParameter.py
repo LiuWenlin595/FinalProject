@@ -39,9 +39,9 @@ class HyperParameters():
     entropy_factor:       float = ENTROPY_FACTOR            # 熵损失的系数
     actor_learning_rate:  float = ACTOR_LEARNING_RATE       # actor学习率       
     critic_learning_rate: float = CRITIC_LEARNING_RATE      # critic学习率
-    recurrent_seq_len:    int = RECURRENT_SEQ_LEN           # LSTM序列长度(batch的个数)
+    recurrent_seq_len:    int = RECURRENT_SEQ_LEN           # 指定参与训练的seq长度
     recurrent_layers:     int = RECURRENT_LAYERS            # LSTM隐层的层数
-    rollout_steps:        int = ROLLOUT_STEPS               # 单局最大帧数
+    rollout_steps:        int = ROLLOUT_STEPS               # episode最大长度
     parallel_rollouts:    int = PARALLEL_ROLLOUTS           # gym矢量化环境同时运行多个子环境
     patience:             int = PATIENCE                    # 达到一定次数未突破, 结束训练
     # LSTM

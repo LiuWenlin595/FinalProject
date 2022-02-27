@@ -1,6 +1,5 @@
 import torch
 import torch.nn as nn
-from torch import distributions
 from torch.nn import functional as F
    
 class Critic(nn.Module):
@@ -23,11 +22,7 @@ class Critic(nn.Module):
         if self.hp.use_lstm:
             if self.hidden_cell is None or batch_size != self.hidden_cell[0].shape[1]:
                 self.get_init_state(batch_size, device)
-            if terminal is not None:  # TODO, 研究LSTMf
-                # a = []
-                # for value in self.hidden_cell:
-                #     tmp = (1. - terminal).reshape(1, batch_size, 1)
-                #     a.append(value * tmp)
+            if terminal is not None:
                 self.hidden_cell = [value * (1. - terminal).reshape(1, batch_size, 1) for value in self.hidden_cell]
             _, self.hidden_cell = self.layer_lstm(state, self.hidden_cell)
             hidden_out = F.elu(self.layer_hidden(self.hidden_cell[0][-1]))

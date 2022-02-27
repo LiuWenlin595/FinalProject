@@ -54,7 +54,6 @@ class Tester:
             self.actor_optimizer = torch.optim.AdamW(self.actor.parameters(), lr=self.hp.actor_learning_rate)
             self.critic_optimizer = torch.optim.AdamW(self.critic.parameters(), lr=self.hp.critic_learning_rate)
          
-        # If max checkpoint iteration is greater than zero initialise training with the checkpoint.
         if max_checkpoint_iteration > 0:
             self.actor, self.critic, self.actor_optimizer, self.critic_optimizer, hp, env_name, env_mask_velocity = load_from_checkpoint(self.base_checkpoint_path, max_checkpoint_iteration, 'cpu')
             
