@@ -46,7 +46,7 @@ def make_hp(args) -> HyperParameters:
 def train(args):
     start_time = datetime.datetime.now()
     hp = make_hp(args)
-    experiment_name = f'{args.env}_{"LSTM" if args.use_lstm else "NoLSTM"}_{"NoVelocity" if args.mask_velocity else "Velocity"}_noise{args.noise}'
+    experiment_name = f'{args.env}_{"LSTM" if args.use_lstm else "NoLSTM"}_{"NoVelocity" if args.mask_velocity else "Velocity"}_noise{args.noise}_sample{args.sample}'
     trainer = Trainer(args.env, args.mask_velocity, experiment_name, hp)
     score = trainer.train()
     end_time = datetime.datetime.now()
@@ -58,7 +58,7 @@ def train(args):
 def test(args):
     start_time = datetime.datetime.now()
     hp = make_hp(args)
-    experiment_name = f'{args.env}_{"LSTM" if args.use_lstm else "NoLSTM"}_{"NoVelocity" if args.mask_velocity else "Velocity"}_noise{args.noise}'
+    experiment_name = f'{args.env}_{"LSTM" if args.use_lstm else "NoLSTM"}_{"NoVelocity" if args.mask_velocity else "Velocity"}_noise{args.noise}_sample{args.sample}'
     tester = Tester(args.env, args.mask_velocity, experiment_name, hp)
     score = tester.test()
     end_time = datetime.datetime.now()
@@ -73,6 +73,7 @@ if __name__ == "__main__":
     parser.add_argument("-m", "--mask-velocity", default=False)
     parser.add_argument("-n", "--name", type=str, default='experiment')
     parser.add_argument("-R", "--use-lstm", default=True)
+    parser.add_argument("-s", "--sample", default=0)
     parser.add_argument("--noise", type=float, default=0.0)
 
     args = parser.parse_args()
