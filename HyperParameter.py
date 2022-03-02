@@ -1,3 +1,4 @@
+from platform import platform
 from dataclasses import dataclass
 
 
@@ -46,9 +47,9 @@ class HyperParameters():
     patience:             int = PATIENCE                    # 达到一定次数未突破, 结束训练
     # LSTM
     use_lstm:             bool = True                       # 网络模型是否加入LSTM                       
-    # Apply to continous action spaces only 
+    # 连续动作空间中使用
     trainable_std_dev:    bool = TRAINABLE_STD_DEV          # 标准差是否需要梯度
     init_log_std_dev:     float = INIT_LOG_STD_DEV          # 初始标准差的log值
-    # Stop condition
-    max_iterations: int = 1000000                           # 最大训练迭代次数
+    # 终止条件
+    max_iterations:       int = 1000000                     # 最大训练迭代次数
     noise:                float = 0.0                       # 对state施加标准正态分布噪声扰动的尺度缩放量

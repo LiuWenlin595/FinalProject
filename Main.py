@@ -33,7 +33,7 @@ def make_hp(args) -> HyperParameters:
                             #init_log_std_dev=1., trainable_std_dev=True)
     elif args.env == "BipedalWalkerHardcore-v3" and not args.mask_velocity:
         # Working :-D
-        hp = HyperParameters(batch_size=1024, parallel_rollouts=16, recurrent_seq_len=8, rollout_steps=1024, patience=10000, entropy_factor=1e-4, 
+        hp = HyperParameters(batch_size=1024, parallel_rollouts=16, recurrent_seq_len=8, rollout_steps=1024, patience=5000, entropy_factor=1e-4, 
                             init_log_std_dev=-1., trainable_std_dev=True, min_reward=-1., hidden_size=256)
     else:
         raise NotImplementedError  
@@ -63,7 +63,7 @@ def test(args):
     score = tester.test()
     end_time = datetime.datetime.now()
     print("test reward: ", score)
-    print("spend time: ", (end_time-start_time).seconds)
+    print("spend time: ", (end_time-start_time).seconds / 3600)
     print("end time: ", datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
 
 

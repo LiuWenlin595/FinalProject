@@ -3,10 +3,13 @@ import pickle
 import torch
 from typing import Optional
 import gym
-from Actor import Actor
-from Critic import Critic
+from multiagent.environment import MultiAgentEnv
+import multiagent.scenarios as scenarios
 from dotmap import DotMap
 import pathlib
+
+from Actor import Actor
+from Critic import Critic
 
 
 # 得到checkpoint最后的iteration次数
@@ -23,7 +26,6 @@ def load_checkpoint(base_checkpoint_path: str, iteration: int, map_loacation: Op
     base_checkpoint = base_checkpoint_path + f"{iteration}/"
     with open(base_checkpoint + "parameters.pt", "rb") as f:
         checkpoint = pickle.load(f)
-        
 
     actor_state_dict = torch.load(base_checkpoint + "actor.pt", map_location=torch.device(map_loacation))
     critic_state_dict = torch.load(base_checkpoint + "critic.pt", map_location=torch.device(map_loacation))
@@ -93,14 +95,20 @@ def save_checkpoint(base_checkpoint_path: str, actor, critic, actor_optimizer, c
     with open(base_checkpoint + "parameters.pt", "wb") as f:
         pickle.dump(checkpoint, f)
     
-    # TODO: Remove this
-    with open(base_checkpoint + "actor_class.pt", "wb") as f:
-        pickle.dump(Actor, f)
-    with open(base_checkpoint + "critic_class.pt", "wb") as f:
-        pickle.dump(Critic, f)
-    # END_TODO
-    
     torch.save(actor.state_dict(), base_checkpoint + "actor.pt")
     torch.save(critic.state_dict(), base_checkpoint + "critic.pt")
     torch.save(actor_optimizer.state_dict(), base_checkpoint + "actor_optimizer.pt")
     torch.save(critic_optimizer.state_dict(), base_checkpoint + "critic_optimizer.pt")
+
+
+# # 得到训练环境
+# def make_env(env_name, platform, benchmark=False):
+#     scenario = scenarios.load(env_name + ".py").Scenario()
+#     # create world
+#     world = scenario.make_world()
+#     # create multiagent environment
+#     if benchmark:
+#         env = MultiAgentEnv(world, scenario.reset_world, scenario.reward, scenario.observation, scenario.benchmark_data)
+#     else:
+#         env = MultiAgentEnv(world, scenario.reset_world, scenario.reward, scenario.observation)
+#     return env

@@ -38,13 +38,7 @@ class Trainer:
         self.gather_device = "cuda:0" if torch.cuda.is_available() and not force_cpu_gather else "cpu"
         self.min_reward_values = torch.full([hp.parallel_rollouts], hp.min_reward)
         self.asynchronous_environment = asynchronous_environment
-        handle = pynvml.nvmlDeviceGetHandleByIndex(0)
-        info = pynvml.nvmlDeviceGetMemoryInfo(handle)
-        print("hunky1, ", info.used / (1024 * 1024 * 1024))
         self.start_or_resume_from_checkpoint()
-        handle = pynvml.nvmlDeviceGetHandleByIndex(0)
-        info = pynvml.nvmlDeviceGetMemoryInfo(handle)
-        print("hunky2, ", info.used / (1024 * 1024 * 1024))
 
         self.best_reward = -1e6
         self.fail_to_improve_count = 0  # 没有提升的训练次数
@@ -255,12 +249,12 @@ class Trainer:
 
             # 统计一共有多少明确terminal的episode
             complete_episode_count = trajectories["terminals"].sum().item()
+            total_episode_count = len(trajectories["terminals"])
+            true_reward_sum = trajectories["true_rewards"].sum(axis=1)
             # 只统计有明确terminal标识的episode的true_reward总和
-            terminal_episodes_rewards = (trajectories["terminals"].sum(axis=1) * trajectories["true_rewards"].sum(axis=1)).sum()
+            terminal_episodes_rewards = (trajectories["terminals"].sum(axis=1) * true_reward_sum).sum()
             # 计算episode的mean reward
             mean_reward =  terminal_episodes_rewards / complete_episode_count
-
-            # TODO, 在统计数据之后对episode处理从而进行优先回放的尝试
 
             # 模型收敛停止的条件
             if mean_reward > self.best_reward:
@@ -272,6 +266,43 @@ class Trainer:
             if self.fail_to_improve_count > self.hp.patience:
                 print(f"Policy has not yielded higher reward for {self.hp.patience} iterations...  Stopping now.")
                 break
+
+            # TODO, 在统计数据之后对episode处理从而进行优先回放的尝试
+            tmp_arg = 2
+            if tmp_arg == 1 and self.iteration > 8000:
+                alpha = 0.6
+                total_episode_idx = true_reward_sum.argsort()
+                eps_idx = total_episode_idx[:int(total_episode_count*alpha)]
+                for key, value in trajectories.items():
+                    trajectories[key] = value[eps_idx]
+            elif tmp_arg == 2:
+                alpha, belta = self.iteration / 10000, 0.6
+                sort_num = int(total_episode_count * alpha)
+                random_num = total_episode_count - sort_num
+                total_episode_idx = true_reward_sum.argsort()
+                # 从排序好的episode中随机选出random_num个, 并将其从total_episode_idx中去除
+                eps_idx_1 = np.random.choice(total_episode_idx, size=random_num, replace=False)
+                eps_idx_2 = np.setdiff1d(total_episode_idx, eps_idx_1)[:int(sort_num*belta)]
+                eps_idx = np.concatenate((eps_idx_1, eps_idx_2))
+                for key, value in trajectories.items():
+                    trajectories[key] = value[eps_idx]
+            elif tmp_arg == 3:
+                alpha, belta = 0.8, 0.5
+                sort_num = int(total_episode_count * alpha)
+                random_num = total_episode_count - sort_num
+                total_episode_idx = true_reward_sum.argsort()
+                # 从排序好的episode中随机选出random_num个, 并将其从total_episode_idx中去除
+                eps_idx_1 = np.random.choice(total_episode_idx, size=random_num, replace=False)
+                total_episode_idx = np.setdiff1d(total_episode_idx, eps_idx_1)
+                # eps_idx_2 = np.setdiff1d(total_episode_idx, eps_idx_1)[:int(sort_num*belta)]
+                rank_prob = np.array([1/i for i in range(1, len(total_episode_idx)+1)])
+                sum_prob = sum(rank_prob)
+                rank_prob = rank_prob / sum_prob
+                eps_idx_2 = np.random.choice(total_episode_idx, size=int(sort_num*belta), replace=False, p=rank_prob)
+                eps_idx = np.concatenate((eps_idx_1, eps_idx_2))
+                for key, value in trajectories.items():
+                    trajectories[key] = value[eps_idx]
+
             handle = pynvml.nvmlDeviceGetHandleByIndex(0)
             info = pynvml.nvmlDeviceGetMemoryInfo(handle)
             print("Before Traj: ", info.used / (1024 * 1024 * 1024))
@@ -333,10 +364,7 @@ class Trainer:
                 self.writer.add_scalar("actor_loss", actor_loss, self.iteration)
                 self.writer.add_scalar("critic_loss", critic_loss, self.iteration)
                 self.writer.add_scalar("policy_entropy", torch.mean(surrogate_loss_2), self.iteration)
-            # if SAVE_PARAMETERS_TENSORBOARD:
-            #     save_parameters(writer, "actor", actor, iteration)
-            #     save_parameters(writer, "value", critic, iteration)
-            if self.iteration % self.checkpoint_frequency == 0:  # TODO, 下次训练改成100
+            if self.iteration % self.checkpoint_frequency == 0:
                 save_checkpoint(self.base_checkpoint_path, self.actor, self.critic, self.actor_optimizer, self.critic_optimizer, self.iteration, self.hp, self.env_name, self.mask_velocity)
             self.iteration += 1
             

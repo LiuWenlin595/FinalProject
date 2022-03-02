@@ -1,7 +1,7 @@
 import numpy as np
- 
-a = np.array([[[1],[2],[3]], [[4],[5],[6]],[[7],[8],[9]]])
-print(a.shape)
-c = a[[0, 0], [[1, 1], [2, 2], [0, 0]]]
+
+a = np.array([1, 2, 3])
+b = np.sum(a)
+c = a / b
 print(c)
-print(c.shape)
+print(np.random.choice(3, 2, False, p=c))
