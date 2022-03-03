@@ -53,3 +53,5 @@ class HyperParameters():
     # 终止条件
     max_iterations:       int = 1000000                     # 最大训练迭代次数
     noise:                float = 0.0                       # 对state施加标准正态分布噪声扰动的尺度缩放量
+    # 采样方式
+    sample:               int = 0                           # 123是reward, 456是delta

@@ -251,6 +251,7 @@ class Trainer:
             complete_episode_count = trajectories["terminals"].sum().item()
             total_episode_count = len(trajectories["terminals"])
             true_reward_sum = trajectories["true_rewards"].sum(axis=1)
+            true_reward_mean = true_reward_sum / trajectories["seq_len"]
             # 只统计有明确terminal标识的episode的true_reward总和
             terminal_episodes_rewards = (trajectories["terminals"].sum(axis=1) * true_reward_sum).sum()
             # 计算episode的mean reward
@@ -268,29 +269,23 @@ class Trainer:
                 break
 
             # TODO, 在统计数据之后对episode处理从而进行优先回放的尝试
-            tmp_arg = 2
-            if tmp_arg == 1 and self.iteration > 8000:
-                alpha = 0.6
-                total_episode_idx = true_reward_sum.argsort()
-                eps_idx = total_episode_idx[:int(total_episode_count*alpha)]
-                for key, value in trajectories.items():
-                    trajectories[key] = value[eps_idx]
-            elif tmp_arg == 2:
-                alpha, belta = self.iteration / 10000, 0.6
+            alpha, belta = self.iteration / 10000, 0.6
+            total_episode_idx = true_reward_mean.argsort()
+            eps_idx = None
+            if self.hp.sample == 1 and self.iteration > 8000:
+                eps_idx = total_episode_idx[:int(total_episode_count*belta)]
+
+            elif self.hp.sample == 2:
                 sort_num = int(total_episode_count * alpha)
                 random_num = total_episode_count - sort_num
-                total_episode_idx = true_reward_sum.argsort()
                 # 从排序好的episode中随机选出random_num个, 并将其从total_episode_idx中去除
                 eps_idx_1 = np.random.choice(total_episode_idx, size=random_num, replace=False)
                 eps_idx_2 = np.setdiff1d(total_episode_idx, eps_idx_1)[:int(sort_num*belta)]
                 eps_idx = np.concatenate((eps_idx_1, eps_idx_2))
-                for key, value in trajectories.items():
-                    trajectories[key] = value[eps_idx]
-            elif tmp_arg == 3:
-                alpha, belta = 0.8, 0.5
+
+            elif self.hp.sample == 3:
                 sort_num = int(total_episode_count * alpha)
                 random_num = total_episode_count - sort_num
-                total_episode_idx = true_reward_sum.argsort()
                 # 从排序好的episode中随机选出random_num个, 并将其从total_episode_idx中去除
                 eps_idx_1 = np.random.choice(total_episode_idx, size=random_num, replace=False)
                 total_episode_idx = np.setdiff1d(total_episode_idx, eps_idx_1)
@@ -300,8 +295,10 @@ class Trainer:
                 rank_prob = rank_prob / sum_prob
                 eps_idx_2 = np.random.choice(total_episode_idx, size=int(sort_num*belta), replace=False, p=rank_prob)
                 eps_idx = np.concatenate((eps_idx_1, eps_idx_2))
-                for key, value in trajectories.items():
-                    trajectories[key] = value[eps_idx]
+
+            # 对于采样出的episode进行提取
+            for key, value in trajectories.items():
+                trajectories[key] = value[eps_idx]
 
             handle = pynvml.nvmlDeviceGetHandleByIndex(0)
             info = pynvml.nvmlDeviceGetMemoryInfo(handle)
@@ -352,7 +349,6 @@ class Trainer:
             handle = pynvml.nvmlDeviceGetHandleByIndex(0)
             info = pynvml.nvmlDeviceGetMemoryInfo(handle)
             print("After clear: ", info.used / (1024 * 1024 * 1024))
-                    
             end_train_time = time.time()
             print(f"Iteration: {self.iteration},  Mean reward: {mean_reward}, Mean Entropy: {torch.mean(surrogate_loss_2)}, " +
                 f"complete_episode_count: {complete_episode_count}, Gather time: {end_gather_time - start_gather_time:.2f}s, " +

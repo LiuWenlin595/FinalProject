@@ -40,6 +40,7 @@ def make_hp(args) -> HyperParameters:
     
     hp.use_lstm = args.use_lstm
     hp.noise = args.noise
+    hp.sample = args.sample
     return hp
 
 
@@ -72,8 +73,8 @@ if __name__ == "__main__":
     parser.add_argument("-e", "--env", type=str, default='BipedalWalkerHardcore-v3')
     parser.add_argument("-m", "--mask-velocity", default=False)
     parser.add_argument("-n", "--name", type=str, default='experiment')
-    parser.add_argument("-R", "--use-lstm", default=True)
-    parser.add_argument("-s", "--sample", default=0)
+    parser.add_argument("-R", "--use-lstm", default=False)
+    parser.add_argument("-s", "--sample", default=2)
     parser.add_argument("--noise", type=float, default=0.0)
 
     args = parser.parse_args()
