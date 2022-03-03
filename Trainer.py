@@ -296,23 +296,26 @@ class Trainer:
                 eps_idx_2 = np.random.choice(total_episode_idx, size=int(sort_num*belta), replace=False, p=rank_prob)
                 eps_idx = np.concatenate((eps_idx_1, eps_idx_2))
 
+            print("alpha: ", alpha, "belta: ", belta)
+            print("before sample: ", trajectories["states"].size())
+
             # 对于采样出的episode进行提取
             for key, value in trajectories.items():
                 trajectories[key] = value[eps_idx]
 
-            handle = pynvml.nvmlDeviceGetHandleByIndex(0)
-            info = pynvml.nvmlDeviceGetMemoryInfo(handle)
-            print("Before Traj: ", info.used / (1024 * 1024 * 1024))
+            # handle = pynvml.nvmlDeviceGetHandleByIndex(0)
+            # info = pynvml.nvmlDeviceGetMemoryInfo(handle)
+            # print("Before Traj: ", info.used / (1024 * 1024 * 1024))
 
-            print(trajectories["states"].size())
+            print("after  sample: ", trajectories["states"].size())
             trajectory_dataset = TrajectoryDataset(trajectories, batch_size=self.hp.batch_size,
                                             device=self.train_device, batch_len=self.hp.recurrent_seq_len, rollout_steps=self.hp.rollout_steps)
             end_gather_time = time.time()
             start_train_time = time.time()
 
-            handle = pynvml.nvmlDeviceGetHandleByIndex(0)
-            info = pynvml.nvmlDeviceGetMemoryInfo(handle)
-            print("After Traj : ", info.used / (1024 * 1024 * 1024))
+            # handle = pynvml.nvmlDeviceGetHandleByIndex(0)
+            # info = pynvml.nvmlDeviceGetMemoryInfo(handle)
+            # print("After Traj : ", info.used / (1024 * 1024 * 1024))
             
             self.actor = self.actor.to(self.train_device)
             self.critic = self.critic.to(self.train_device)
@@ -346,9 +349,9 @@ class Trainer:
 
             torch.cuda.empty_cache()    # 定期清理GPU缓存
 
-            handle = pynvml.nvmlDeviceGetHandleByIndex(0)
-            info = pynvml.nvmlDeviceGetMemoryInfo(handle)
-            print("After clear: ", info.used / (1024 * 1024 * 1024))
+            # handle = pynvml.nvmlDeviceGetHandleByIndex(0)
+            # info = pynvml.nvmlDeviceGetMemoryInfo(handle)
+            # print("After clear: ", info.used / (1024 * 1024 * 1024))
             end_train_time = time.time()
             print(f"Iteration: {self.iteration},  Mean reward: {mean_reward}, Mean Entropy: {torch.mean(surrogate_loss_2)}, " +
                 f"complete_episode_count: {complete_episode_count}, Gather time: {end_gather_time - start_gather_time:.2f}s, " +

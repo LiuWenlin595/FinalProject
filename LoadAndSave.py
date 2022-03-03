@@ -3,8 +3,6 @@ import pickle
 import torch
 from typing import Optional
 import gym
-from multiagent.environment import MultiAgentEnv
-import multiagent.scenarios as scenarios
 from dotmap import DotMap
 import pathlib
 
