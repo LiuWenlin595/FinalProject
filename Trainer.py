@@ -271,7 +271,7 @@ class Trainer:
             start_iteration = 8000
             total_episode_count = len(trajectories["terminals"])
             total_episode_idx = None  # minibatch中所有episode根据指标进行idx的由小到大排序
-            if 1 <= self.hp.sample <= 3 and self.iteration > start_iteration:
+            if 1 <= self.hp.sample <= 3:
                 reward_sum = trajectories["rewards"].sum(axis=1)
                 reward_mean = reward_sum / trajectories["seq_len"]
                 total_episode_idx = reward_mean.argsort()
