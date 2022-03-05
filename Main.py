@@ -73,11 +73,11 @@ if __name__ == "__main__":
     parser.add_argument("-e", "--env", type=str, default='BipedalWalkerHardcore-v3')
     parser.add_argument("-m", "--mask-velocity", default=False)
     parser.add_argument("-n", "--name", type=str, default='experiment')
-    parser.add_argument("-R", "--use-lstm", default=False)
-    parser.add_argument("-s", "--sample", default=2)
+    parser.add_argument("-R", "--use-lstm", default=True)
+    parser.add_argument("-s", "--sample", default=1)
     parser.add_argument("--noise", type=float, default=0.0)
 
     args = parser.parse_args()
 
-    train(args)
-    # test(args)
+    # train(args)
+    test(args)

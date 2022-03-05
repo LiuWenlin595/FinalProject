@@ -1,3 +1,4 @@
+from random import sample
 from HyperParameter import HyperParameters
 from pickle import DICT
 import torch
@@ -249,11 +250,8 @@ class Trainer:
 
             # 统计一共有多少明确terminal的episode
             complete_episode_count = trajectories["terminals"].sum().item()
-            total_episode_count = len(trajectories["terminals"])
-            true_reward_sum = trajectories["true_rewards"].sum(axis=1)
-            true_reward_mean = true_reward_sum / trajectories["seq_len"]
-            # 只统计有明确terminal标识的episode的true_reward总和
-            terminal_episodes_rewards = (trajectories["terminals"].sum(axis=1) * true_reward_sum).sum()
+            # 只统计有明确terminal标识的episode的reward总和
+            terminal_episodes_rewards = (trajectories["terminals"].sum(axis=1) * trajectories["true_rewards"].sum(axis=1)).sum()
             # 计算episode的mean reward
             mean_reward =  terminal_episodes_rewards / complete_episode_count
 
@@ -268,14 +266,29 @@ class Trainer:
                 print(f"Policy has not yielded higher reward for {self.hp.patience} iterations...  Stopping now.")
                 break
 
-            # TODO, 在统计数据之后对episode处理从而进行优先回放的尝试
-            alpha, belta = self.iteration / 10000, 0.6
-            total_episode_idx = true_reward_mean.argsort()
+
+            alpha, belta = min((self.iteration / 20000)**2, 1.0), 0.6
+            start_iteration = 8000
+            total_episode_count = len(trajectories["terminals"])
+            total_episode_idx = None  # minibatch中所有episode根据指标进行idx的由小到大排序
+            if 1 <= self.hp.sample <= 3 and self.iteration > start_iteration:
+                reward_sum = trajectories["rewards"].sum(axis=1)
+                reward_mean = reward_sum / trajectories["seq_len"]
+                total_episode_idx = reward_mean.argsort()
+            elif 4 <= self.hp.sample <= 6:
+                # 计算deltas相关
+                deltas = trajectories["rewards"] + self.hp.discount * trajectories["values"][:, 1:] - trajectories["values"][:, :-1]
+                deltas_abs_sum = torch.maximum(deltas, -deltas).sum(axis=1)
+                deltas_abs_mean = deltas_abs_sum / trajectories["seq_len"]
+                total_episode_idx = deltas_abs_mean.argsort()
+                
+            # 针对on policy的优先回放
             eps_idx = None
-            if self.hp.sample == 1 and self.iteration > 8000:
+            if (self.hp.sample == 1 or self.hp.sample == 4) and self.iteration > start_iteration:
                 eps_idx = total_episode_idx[:int(total_episode_count*belta)]
 
-            elif self.hp.sample == 2:
+            elif self.hp.sample == 2 or self.hp.sample == 5:
+                print("alpha: ", alpha, "belta: ", belta)
                 sort_num = int(total_episode_count * alpha)
                 random_num = total_episode_count - sort_num
                 # 从排序好的episode中随机选出random_num个, 并将其从total_episode_idx中去除
@@ -283,7 +296,8 @@ class Trainer:
                 eps_idx_2 = np.setdiff1d(total_episode_idx, eps_idx_1)[:int(sort_num*belta)]
                 eps_idx = np.concatenate((eps_idx_1, eps_idx_2))
 
-            elif self.hp.sample == 3:
+            elif self.hp.sample == 3 or self.hp.sample == 6:
+                print("alpha: ", alpha, "belta: ", belta)
                 sort_num = int(total_episode_count * alpha)
                 random_num = total_episode_count - sort_num
                 # 从排序好的episode中随机选出random_num个, 并将其从total_episode_idx中去除
@@ -296,18 +310,17 @@ class Trainer:
                 eps_idx_2 = np.random.choice(total_episode_idx, size=int(sort_num*belta), replace=False, p=rank_prob)
                 eps_idx = np.concatenate((eps_idx_1, eps_idx_2))
 
-            print("alpha: ", alpha, "belta: ", belta)
-            print("before sample: ", trajectories["states"].size())
-
             # 对于采样出的episode进行提取
-            for key, value in trajectories.items():
-                trajectories[key] = value[eps_idx]
+            if eps_idx is not None:
+                print("before sample: ", trajectories["states"].size())
+                for key, value in trajectories.items():
+                    trajectories[key] = value[eps_idx]
+                print("after  sample: ", trajectories["states"].size())
 
             # handle = pynvml.nvmlDeviceGetHandleByIndex(0)
             # info = pynvml.nvmlDeviceGetMemoryInfo(handle)
             # print("Before Traj: ", info.used / (1024 * 1024 * 1024))
 
-            print("after  sample: ", trajectories["states"].size())
             trajectory_dataset = TrajectoryDataset(trajectories, batch_size=self.hp.batch_size,
                                             device=self.train_device, batch_len=self.hp.recurrent_seq_len, rollout_steps=self.hp.rollout_steps)
             end_gather_time = time.time()
