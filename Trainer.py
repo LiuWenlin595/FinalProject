@@ -336,7 +336,7 @@ class Trainer:
             # PPO算法开始训练
             for epoch_idx in range(self.hp.ppo_epochs):
                 # 详见__next__方法
-                for batch in trajectory_dataset:   
+                for batch in trajectory_dataset:
                     # 因为选取的序列是连续的, 所以取序列最开头的hidden_cell参与网络
                     self.actor.hidden_cell = (batch.actor_hidden_states[:1], batch.actor_cell_states[:1])
                     

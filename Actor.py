@@ -22,6 +22,7 @@ class Actor(nn.Module):
                             torch.zeros(self.hp.recurrent_layers, batch_size, self.hp.hidden_size).to(device))
         
     def forward(self, state, terminal=None):
+        # state shape = [seq_len, batch_size, state_dim]
         batch_size = state.shape[1]
         device = state.device
         if self.hp.use_lstm:

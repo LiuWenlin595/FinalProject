@@ -23,6 +23,10 @@ PATIENCE:             int = 200
 TRAINABLE_STD_DEV:    bool = False 
 INIT_LOG_STD_DEV:     float = 0.0
 
+NUM_EPISODES:         int = 1000
+NUM_TEAM1:            int = 1
+NUM_TEAM2:            int = 1
+NUM_OBSTACLES:        int = 2
 
 
 # 修饰数据类, 用于方便整理属性, 避免了init方法等等
@@ -40,7 +44,7 @@ class HyperParameters():
     entropy_factor:       float = ENTROPY_FACTOR            # 熵损失的系数
     actor_learning_rate:  float = ACTOR_LEARNING_RATE       # actor学习率       
     critic_learning_rate: float = CRITIC_LEARNING_RATE      # critic学习率
-    recurrent_seq_len:    int = RECURRENT_SEQ_LEN           # 指定参与训练的seq长度
+    recurrent_seq_len:    int = RECURRENT_SEQ_LEN           # 参与训练seq的最小长度
     recurrent_layers:     int = RECURRENT_LAYERS            # LSTM隐层的层数
     rollout_steps:        int = ROLLOUT_STEPS               # episode最大长度
     parallel_rollouts:    int = PARALLEL_ROLLOUTS           # gym矢量化环境同时运行多个子环境
@@ -55,3 +59,9 @@ class HyperParameters():
     noise:                float = 0.0                       # 对state施加标准正态分布噪声扰动的尺度缩放量
     # 采样方式
     sample:               int = 0                           # 123是reward, 456是delta
+    
+    # MPE环境专属
+    num_episodes:         int = NUM_EPISODES                # 一次采样rollout的局数
+    num_team1:            int = NUM_TEAM1                   # advertory                   
+    num_team2:            int = NUM_TEAM2                   # agent
+    num_obstacles:        int = NUM_OBSTACLES

@@ -97,16 +97,3 @@ def save_checkpoint(base_checkpoint_path: str, actor, critic, actor_optimizer, c
     torch.save(critic.state_dict(), base_checkpoint + "critic.pt")
     torch.save(actor_optimizer.state_dict(), base_checkpoint + "actor_optimizer.pt")
     torch.save(critic_optimizer.state_dict(), base_checkpoint + "critic_optimizer.pt")
-
-
-# # 得到训练环境
-# def make_env(env_name, platform, benchmark=False):
-#     scenario = scenarios.load(env_name + ".py").Scenario()
-#     # create world
-#     world = scenario.make_world()
-#     # create multiagent environment
-#     if benchmark:
-#         env = MultiAgentEnv(world, scenario.reset_world, scenario.reward, scenario.observation, scenario.benchmark_data)
-#     else:
-#         env = MultiAgentEnv(world, scenario.reset_world, scenario.reward, scenario.observation)
-#     return env

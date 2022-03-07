@@ -1,1 +1,5 @@
-单智能体部分的毕业论文
+毕业论文, 单/多智能体
+
+安装pytorch, tensorboard
+安装gym, swig, gym[box]
+安装pettingzoo
