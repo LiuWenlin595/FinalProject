@@ -60,7 +60,7 @@ def load_from_checkpoint(base_checkpoint_path: str, iteration: int, map_loacatio
     team1_actor_state_dict, team1_critic_state_dict, team1_actor_optimizer_state_dict, team1_critic_optimizer_state_dict, team2_actor_state_dict, \
         team2_critic_state_dict, team2_actor_optimizer_state_dict, team2_critic_optimizer_state_dict, hp, env_name = load_checkpoint(base_checkpoint_path, iteration, map_loacation)
     
-    global_obsv_dim, team1_obsv_dim, team2_obsv_dim, action_dim, continuous_action_space = get_env_space(env_name)
+    global_obsv_dim, team1_obsv_dim, team2_obsv_dim, action_dim, continuous_action_space = get_env_space(env_name, hp)
 
     team1_actor = Actor(team1_obsv_dim,
                 action_dim,
@@ -70,8 +70,9 @@ def load_from_checkpoint(base_checkpoint_path: str, iteration: int, map_loacatio
                 action_dim,
                 continuous_action_space=continuous_action_space,
                 hp = hp)
-    team1_critic = Critic(global_obsv_dim, hp)
-    team2_critic = Critic(global_obsv_dim, hp)
+    # TODO, 改成global_obsv
+    team1_critic = Critic(team1_obsv_dim, hp)
+    team2_critic = Critic(team2_obsv_dim, hp)
 
     team1_actor_optimizer = torch.optim.AdamW(team1_actor.parameters(), lr=hp.actor_learning_rate)
     team1_critic_optimizer = torch.optim.AdamW(team1_critic.parameters(), lr=hp.critic_learning_rate)

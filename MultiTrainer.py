@@ -83,7 +83,7 @@ class MultiTrainer:
             
             assert env_name == self.env_name, "To resume training environment must match current settings."
             # 因为patience, 所以有时候需要暂时关闭
-            assert self.hp == hp, "To resume training hyperparameters must match current settings."
+            # assert self.hp == hp, "To resume training hyperparameters must match current settings."
             for state in self.team1_actor_optimizer.state.values():
                 for k, v in state.items():
                     if isinstance(v, torch.Tensor):
@@ -176,7 +176,7 @@ class MultiTrainer:
                 obsv = self.env.reset()
                 global_obsv = [v for v in obsv.values()]
                 global_obsv = torch.tensor(np.concatenate(tuple(global_obsv)), dtype=torch.float32)
-        
+
                 # 重置actor和critic的hidden_cell
                 self.team1_actor.get_init_state(self.hp.parallel_rollouts, self.gather_device)
                 self.team2_actor.get_init_state(self.hp.parallel_rollouts, self.gather_device)
@@ -184,6 +184,8 @@ class MultiTrainer:
                 self.team2_critic.get_init_state(self.hp.parallel_rollouts, self.gather_device)
                 # MPE环境一定执行rollout_steps步, 无提前done, 所以一次for循环产生的traj一定是一个完整的episode, 后面也省略了split和pad
                 for t in range(self.hp.rollout_steps):
+                    # self.env.render()
+                    # time.sleep(0.05)
                     for i in range(self.hp.num_team1):
                         trajectory_episodes[i]["actor_hidden_states"].append(self.team1_actor.hidden_cell[0].squeeze(0).squeeze(0).cpu())
                         trajectory_episodes[i]["actor_cell_states"].append(self.team1_actor.hidden_cell[1].squeeze(0).squeeze(0).cpu())
@@ -225,6 +227,7 @@ class MultiTrainer:
                     obsv, reward, done, _ = self.env.step(actions)
                     global_obsv = [v for v in obsv.values()]
                     global_obsv = torch.tensor(np.concatenate(tuple(global_obsv)), dtype=torch.float32)
+                    # TODO, reward看一下, 官网说是累积, 看看到底是不是
                     for i in range(self.hp.num_team1 + self.hp.num_team2):
                         terminal = torch.tensor(done[agents[i]]).float()
                         true_reward = torch.tensor(reward[agents[i]]).float()   # 碰撞agent, 所有捕猎者+10, 单个agent-10; agent有额外的出界惩罚
@@ -234,8 +237,6 @@ class MultiTrainer:
                         trajectory_episodes[i]["terminals"].append(terminal)
 
                 # traj的最后额外计算一个v值, 便于后续gae之类的计算
-                # TODO, 但是在MPE环境中, 最后一步的done全都是True, 相当于v值是0, 那么就不需要额外添加了, 因为在split函数里会做统一的添加
-                # MPE环境的最后一步会把env的agent清空, 所以无法通过self.env.agents[i]找到对应的agent
                 for i in range(self.hp.num_team1):
                     value = self.team1_critic(torch.tensor(obsv[agents[i]]).unsqueeze(0).unsqueeze(0).to(self.gather_device), terminal.to(self.gather_device))
                     trajectory_episodes[i]["values"].append(value.squeeze(1).cpu()) # 这里不想加(1 - done[agents[i]]), 因为done一定是true但是我想要value
