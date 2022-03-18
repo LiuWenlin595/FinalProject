@@ -184,8 +184,6 @@ class MultiTrainer:
                 self.team2_critic.get_init_state(self.hp.parallel_rollouts, self.gather_device)
                 # MPE环境一定执行rollout_steps步, 无提前done, 所以一次for循环产生的traj一定是一个完整的episode, 后面也省略了split和pad
                 for t in range(self.hp.rollout_steps):
-                    # self.env.render()
-                    # time.sleep(0.05)
                     for i in range(self.hp.num_team1):
                         trajectory_episodes[i]["actor_hidden_states"].append(self.team1_actor.hidden_cell[0].squeeze(0).squeeze(0).cpu())
                         trajectory_episodes[i]["actor_cell_states"].append(self.team1_actor.hidden_cell[1].squeeze(0).squeeze(0).cpu())
@@ -201,7 +199,6 @@ class MultiTrainer:
                     # critic使用全局obsv, actor使用局部obsv
                     actions = {}
                     for i in range(self.hp.num_team1):
-                        a = torch.tensor(obsv[agents[i]])
                         value = self.team1_critic(torch.tensor(obsv[agents[i]]).unsqueeze(0).unsqueeze(0).to(self.gather_device), terminal.to(self.gather_device))
                         trajectory_episodes[i]["values"].append(value.squeeze(1).cpu())
                         state = torch.tensor(obsv[agents[i]], dtype=torch.float32)
@@ -227,7 +224,6 @@ class MultiTrainer:
                     obsv, reward, done, _ = self.env.step(actions)
                     global_obsv = [v for v in obsv.values()]
                     global_obsv = torch.tensor(np.concatenate(tuple(global_obsv)), dtype=torch.float32)
-                    # TODO, reward看一下, 官网说是累积, 看看到底是不是
                     for i in range(self.hp.num_team1 + self.hp.num_team2):
                         terminal = torch.tensor(done[agents[i]]).float()
                         true_reward = torch.tensor(reward[agents[i]]).float()   # 碰撞agent, 所有捕猎者+10, 单个agent-10; agent有额外的出界惩罚
@@ -324,62 +320,10 @@ class MultiTrainer:
                 print(f"Policy has not yielded higher reward for {self.hp.patience} iterations...  Stopping now.")
                 break
 
-
-            # alpha, belta = min((self.iteration / 20000)**2, 1.0), 0.6
-            # start_iteration = 8000
-            # total_episode_count = len(team1_trajectories["terminals"])
-            # total_episode_idx = None  # minibatch中所有episode根据指标进行idx的由小到大排序
-            # if 1 <= self.hp.sample <= 3:
-            #     reward_sum = team1_trajectories["rewards"].sum(axis=1)
-            #     reward_mean = reward_sum / team1_trajectories["seq_len"]
-            #     total_episode_idx = reward_mean.argsort()
-            # elif 4 <= self.hp.sample <= 6:
-            #     # 计算deltas相关
-            #     deltas = team1_trajectories["rewards"] + self.hp.discount * team1_trajectories["values"][:, 1:] - team1_trajectories["values"][:, :-1]
-            #     deltas_abs_sum = torch.maximum(deltas, -deltas).sum(axis=1)
-            #     deltas_abs_mean = deltas_abs_sum / team1_trajectories["seq_len"]
-            #     total_episode_idx = deltas_abs_mean.argsort()
-                
-            # # 针对on policy的优先回放
-            # eps_idx = None
-            # if (self.hp.sample == 1 or self.hp.sample == 4) and self.iteration > start_iteration:
-            #     eps_idx = total_episode_idx[:int(total_episode_count*belta)]
-
-            # elif self.hp.sample == 2 or self.hp.sample == 5:
-            #     print("alpha: ", alpha, "belta: ", belta)
-            #     sort_num = int(total_episode_count * alpha)
-            #     random_num = total_episode_count - sort_num
-            #     # 从排序好的episode中随机选出random_num个, 并将其从total_episode_idx中去除
-            #     eps_idx_1 = np.random.choice(total_episode_idx, size=random_num, replace=False)
-            #     eps_idx_2 = np.setdiff1d(total_episode_idx, eps_idx_1)[:int(sort_num*belta)]
-            #     eps_idx = np.concatenate((eps_idx_1, eps_idx_2))
-
-            # elif self.hp.sample == 3 or self.hp.sample == 6:
-            #     print("alpha: ", alpha, "belta: ", belta)
-            #     sort_num = int(total_episode_count * alpha)
-            #     random_num = total_episode_count - sort_num
-            #     # 从排序好的episode中随机选出random_num个, 并将其从total_episode_idx中去除
-            #     eps_idx_1 = np.random.choice(total_episode_idx, size=random_num, replace=False)
-            #     total_episode_idx = np.setdiff1d(total_episode_idx, eps_idx_1)
-            #     # eps_idx_2 = np.setdiff1d(total_episode_idx, eps_idx_1)[:int(sort_num*belta)]
-            #     rank_prob = np.array([1/i for i in range(1, len(total_episode_idx)+1)])
-            #     sum_prob = sum(rank_prob)
-            #     rank_prob = rank_prob / sum_prob
-            #     eps_idx_2 = np.random.choice(total_episode_idx, size=int(sort_num*belta), replace=False, p=rank_prob)
-            #     eps_idx = np.concatenate((eps_idx_1, eps_idx_2))
-
-            # # 对于采样出的episode进行提取
-            # if eps_idx is not None:
-            #     print("before sample: ", team1_trajectories["states"].size())
-            #     for key, value in team1_trajectories.items():
-            #         team1_trajectories[key] = value[eps_idx]
-            #     print("after  sample: ", team1_trajectories["states"].size())
-
             # handle = pynvml.nvmlDeviceGetHandleByIndex(0)
             # info = pynvml.nvmlDeviceGetMemoryInfo(handle)
             # print("Before Traj: ", info.used / (1024 * 1024 * 1024))
 
-            
             team1_trajectory_dataset = TrajectoryDataset(team1_trajectories, batch_size=self.hp.batch_size,
                                             device=self.train_device, batch_len=self.hp.recurrent_seq_len, rollout_steps=self.hp.rollout_steps)
             team2_trajectory_dataset = TrajectoryDataset(team2_trajectories, batch_size=self.hp.batch_size,
@@ -431,7 +375,7 @@ class MultiTrainer:
                 self.writer.add_scalar("team1_policy_entropy", torch.mean(surrogate_loss_2), self.iteration)
 
             for epoch_idx in range(self.hp.ppo_epochs):
-                for batch in team2_trajectory_dataset:   
+                for batch in team2_trajectory_dataset:
                     # 因为选取的序列是连续的, 所以取序列最开头的hidden_cell参与网络
                     self.team2_actor.hidden_cell = (batch.actor_hidden_states[:1], batch.actor_cell_states[:1])
                     

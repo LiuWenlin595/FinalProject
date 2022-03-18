@@ -43,6 +43,8 @@ class Trainer:
 
         self.best_reward = -1e6
         self.fail_to_improve_count = 0  # 没有提升的训练次数
+        self.per_threshold = 1000   # 容忍阈值, 需要比patience小
+        self.use_per = False    # 达到容忍阈值后应用on policy PER
 
         # 矢量化环境和标准gym环境一大不同就是会自动reset, 所以子环境的done生效时对应的state是reset后的初始状态
         # 子环境的step是并行还是串行, 因为电脑跑不起来很多线程所以区别不大
@@ -235,6 +237,66 @@ class Trainer:
         return return_val   # shape = [episode个数, rollout_steps, dim]
  
 
+    # on policy 优先级经验回放
+    def on_policy_priority_sample(self, trajectories):
+        alpha, belta = min((self.iteration / 20000)**2, 1.0), 0.6
+        start_iteration = -1
+        total_episode_count = len(trajectories["terminals"])
+        total_episode_idx = None  # minibatch中所有episode根据指标进行idx的由小到大排序
+        if 1 <= self.hp.sample <= 3:
+            reward_sum = trajectories["rewards"].sum(axis=1)
+            reward_mean = reward_sum / trajectories["seq_len"]
+            total_episode_idx = reward_mean.argsort()
+        elif 4 <= self.hp.sample <= 6:
+            # 计算deltas相关
+            deltas = trajectories["rewards"] + self.hp.discount * trajectories["values"][:, 1:] - trajectories["values"][:, :-1]
+            deltas_abs_sum = torch.maximum(deltas, -deltas).sum(axis=1)
+            deltas_abs_mean = deltas_abs_sum / trajectories["seq_len"]
+            total_episode_idx = deltas_abs_mean.argsort()
+            
+        # 针对on policy的优先回放
+        eps_idx = None
+        if (self.hp.sample == 1 or self.hp.sample == 4) and self.iteration > start_iteration:
+            eps_idx = total_episode_idx[:int(total_episode_count*belta)]
+
+        elif self.hp.sample == 2 or self.hp.sample == 5:
+            print("alpha: ", alpha, "belta: ", belta)
+            sort_num = int(total_episode_count * alpha)
+            random_num = total_episode_count - sort_num
+            # 从排序好的episode中随机选出random_num个, 并将其从total_episode_idx中去除
+            eps_idx_1 = np.random.choice(total_episode_idx, size=random_num, replace=False)
+            eps_idx_2 = np.setdiff1d(total_episode_idx, eps_idx_1)[:int(sort_num*belta)]
+            eps_idx = np.concatenate((eps_idx_1, eps_idx_2))
+
+        elif (self.hp.sample == 3 or self.hp.sample == 7) and self.use_per:
+            eps_idx = total_episode_idx[:int(total_episode_count*belta)]
+
+        elif self.hp.sample == 4 or self.hp.sample == 8:
+            print("alpha: ", alpha, "belta: ", belta)
+            # sort_num = int(total_episode_count * alpha)
+            # random_num = total_episode_count - sort_num
+            # # 从排序好的episode中随机选出random_num个, 并将其从total_episode_idx中去除
+            # eps_idx_1 = np.random.choice(total_episode_idx, size=random_num, replace=False)
+            # total_episode_idx = np.setdiff1d(total_episode_idx, eps_idx_1)
+            # rank_prob = np.array([1/i for i in range(1, len(total_episode_idx)+1)])
+            # sum_prob = sum(rank_prob)
+            # rank_prob = rank_prob / sum_prob
+            # eps_idx_2 = np.random.choice(total_episode_idx, size=sort_num, replace=False, p=rank_prob)
+            # eps_idx = np.concatenate((eps_idx_1, eps_idx_2))
+            rank_prob = np.array([1/i for i in range(1, len(total_episode_idx)+1)])
+            sum_prob = sum(rank_prob)
+            rank_prob = rank_prob / sum_prob
+            eps_idx = np.random.choice(total_episode_idx, size=int(total_episode_count*belta), replace=False, p=rank_prob)
+
+        # 对于采样出的episode进行提取
+        if eps_idx is not None:
+            print("before sample: ", trajectories["states"].size())
+            for key, value in trajectories.items():
+                trajectories[key] = value[eps_idx]
+            print("after  sample: ", trajectories["states"].size())
+        return trajectories
+
+
     def train(self):
         print(torch.cuda.is_available(), torch.cuda.get_device_name(0))
         while self.iteration < self.hp.max_iterations:      
@@ -259,63 +321,18 @@ class Trainer:
             if mean_reward > self.best_reward:
                 self.best_reward = mean_reward
                 self.fail_to_improve_count = 0
-            else:
-                self.fail_to_improve_count += 1
-            
-            if self.fail_to_improve_count > self.hp.patience:
+            elif self.fail_to_improve_count > self.hp.patience:
                 print(f"Policy has not yielded higher reward for {self.hp.patience} iterations...  Stopping now.")
                 break
+            elif self.fail_to_improve_count > self.per_threshold and not self.use_per:
+                print("use PER iteration: ", self.iteration)
+                self.use_per = True
+                self.fail_to_improve_count = 0  # 重新开始计数
+            else:
+                self.fail_to_improve_count += 1
 
-
-            alpha, belta = min((self.iteration / 20000)**2, 1.0), 0.6
-            start_iteration = 8000
-            total_episode_count = len(trajectories["terminals"])
-            total_episode_idx = None  # minibatch中所有episode根据指标进行idx的由小到大排序
-            if 1 <= self.hp.sample <= 3:
-                reward_sum = trajectories["rewards"].sum(axis=1)
-                reward_mean = reward_sum / trajectories["seq_len"]
-                total_episode_idx = reward_mean.argsort()
-            elif 4 <= self.hp.sample <= 6:
-                # 计算deltas相关
-                deltas = trajectories["rewards"] + self.hp.discount * trajectories["values"][:, 1:] - trajectories["values"][:, :-1]
-                deltas_abs_sum = torch.maximum(deltas, -deltas).sum(axis=1)
-                deltas_abs_mean = deltas_abs_sum / trajectories["seq_len"]
-                total_episode_idx = deltas_abs_mean.argsort()
-                
-            # 针对on policy的优先回放
-            eps_idx = None
-            if (self.hp.sample == 1 or self.hp.sample == 4) and self.iteration > start_iteration:
-                eps_idx = total_episode_idx[:int(total_episode_count*belta)]
-
-            elif self.hp.sample == 2 or self.hp.sample == 5:
-                print("alpha: ", alpha, "belta: ", belta)
-                sort_num = int(total_episode_count * alpha)
-                random_num = total_episode_count - sort_num
-                # 从排序好的episode中随机选出random_num个, 并将其从total_episode_idx中去除
-                eps_idx_1 = np.random.choice(total_episode_idx, size=random_num, replace=False)
-                eps_idx_2 = np.setdiff1d(total_episode_idx, eps_idx_1)[:int(sort_num*belta)]
-                eps_idx = np.concatenate((eps_idx_1, eps_idx_2))
-
-            elif self.hp.sample == 3 or self.hp.sample == 6:
-                print("alpha: ", alpha, "belta: ", belta)
-                sort_num = int(total_episode_count * alpha)
-                random_num = total_episode_count - sort_num
-                # 从排序好的episode中随机选出random_num个, 并将其从total_episode_idx中去除
-                eps_idx_1 = np.random.choice(total_episode_idx, size=random_num, replace=False)
-                total_episode_idx = np.setdiff1d(total_episode_idx, eps_idx_1)
-                # eps_idx_2 = np.setdiff1d(total_episode_idx, eps_idx_1)[:int(sort_num*belta)]
-                rank_prob = np.array([1/i for i in range(1, len(total_episode_idx)+1)])
-                sum_prob = sum(rank_prob)
-                rank_prob = rank_prob / sum_prob
-                eps_idx_2 = np.random.choice(total_episode_idx, size=int(sort_num*belta), replace=False, p=rank_prob)
-                eps_idx = np.concatenate((eps_idx_1, eps_idx_2))
-
-            # 对于采样出的episode进行提取
-            if eps_idx is not None:
-                print("before sample: ", trajectories["states"].size())
-                for key, value in trajectories.items():
-                    trajectories[key] = value[eps_idx]
-                print("after  sample: ", trajectories["states"].size())
+            if self.hp.sample > 0:
+                trajectories = self.on_policy_priority_sample(trajectories)
 
             # handle = pynvml.nvmlDeviceGetHandleByIndex(0)
             # info = pynvml.nvmlDeviceGetMemoryInfo(handle)

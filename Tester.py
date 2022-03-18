@@ -13,21 +13,17 @@ class Tester:
                  env_name: str,
                  mask_velocity: bool,
                  experiment_name: str,
-                 hp: HyperParameters,
                  force_cpu_gather: bool = True,
                  workspace_path: str = './workspace') -> None:
         
-        self.hp = hp
         self.env_name = env_name
         self.mask_velocity = mask_velocity
-        self.obsv_dim, self.action_dim, self.continuous_action_space = get_env_space(env_name)
         self.base_checkpoint_path = f'{workspace_path}/checkpoints/{experiment_name}/'
+        self.start_or_resume_from_checkpoint()
+        self.obsv_dim, self.action_dim, self.continuous_action_space = get_env_space(env_name)
         
         self.train_device = "cuda:0" if torch.cuda.is_available() else "cpu"
         self.gather_device = "cuda:0" if torch.cuda.is_available() and not force_cpu_gather else "cpu"
-        self.start_or_resume_from_checkpoint()
-
-        self.best_reward = -1e6
 
         self.env = gym.make(self.env_name)
         if self.mask_velocity:
@@ -44,33 +40,13 @@ class Tester:
     def start_or_resume_from_checkpoint(self):
         max_checkpoint_iteration = get_last_checkpoint_iteration(self.base_checkpoint_path)
         
-        if max_checkpoint_iteration == 0:
-            self.actor = Actor(self.obsv_dim,
-                        self.action_dim,
-                        continuous_action_space=self.continuous_action_space,
-                        hp = self.hp)
-            self.critic = Critic(self.obsv_dim, self.hp)
-            
-            self.actor_optimizer = torch.optim.AdamW(self.actor.parameters(), lr=self.hp.actor_learning_rate)
-            self.critic_optimizer = torch.optim.AdamW(self.critic.parameters(), lr=self.hp.critic_learning_rate)
-         
-        if max_checkpoint_iteration > 0:
-            self.actor, self.critic, self.actor_optimizer, self.critic_optimizer, hp, env_name, env_mask_velocity = load_from_checkpoint(self.base_checkpoint_path, max_checkpoint_iteration, 'cpu')
-            
+        if max_checkpoint_iteration <= 0:
+            print("找不到checkpoint: ", self.base_checkpoint_path)
+            NotImplementedError
+        else:   # 从checkpoint恢复
+            self.actor, self.critic, self.actor_optimizer, self.critic_optimizer, self.hp, env_name, env_mask_velocity = load_from_checkpoint(self.base_checkpoint_path, max_checkpoint_iteration, 'cpu')
             assert env_name == self.env_name, "To resume training environment must match current settings."
             assert env_mask_velocity == self.mask_velocity, "To resume training model architecture must match current settings."
-            # TODO, 因为patience, 所以暂时关闭
-            # assert self.hp == hp, "To resume training hyperparameters must match current settings."
-            # We have to move manually move optimizer states to TRAIN_DEVICE manually since optimizer doesn't yet have a "to" method.
-            for state in self.actor_optimizer.state.values():
-                for k, v in state.items():
-                    if isinstance(v, torch.Tensor):
-                        state[k] = v.to(self.train_device)
-
-            for state in self.critic_optimizer.state.values():
-                for k, v in state.items():
-                    if isinstance(v, torch.Tensor):
-                        state[k] = v.to(self.train_device)
     
 
     def test(self):

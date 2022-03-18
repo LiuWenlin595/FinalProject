@@ -4,6 +4,7 @@ import datetime
 import imp
 
 from HyperParameter import HyperParameters
+from MultiTester import MultiTester
 from Trainer import Trainer
 from MultiTrainer import MultiTrainer
 from Tester import Tester
@@ -36,12 +37,13 @@ def make_hp(args) -> HyperParameters:
                             #init_log_std_dev=1., trainable_std_dev=True)
     elif args.env == "BipedalWalkerHardcore-v3" and not args.mask_velocity:
         # Working :-D
+        # TODO, 样本利用率有点低, 最后1.96将将好错过2, 尝试调参
         hp = HyperParameters(batch_size=1024, parallel_rollouts=16, recurrent_seq_len=8, rollout_steps=1024, patience=5000, entropy_factor=1e-4, 
                             init_log_std_dev=-1., trainable_std_dev=True, min_reward=-1., hidden_size=256)
     elif args.env == "simple_tag":
         # Working :-D
-        hp = HyperParameters(batch_size=128, parallel_rollouts=1, recurrent_seq_len=8, num_episodes=50, rollout_steps=100, patience=2000,
-                            actor_learning_rate=1e-4, critic_learning_rate=1e-4, entropy_factor=1e-4, hidden_size=128, num_team1=3, num_team2=2, num_obstacles=2)
+        hp = HyperParameters(batch_size=512, parallel_rollouts=1, recurrent_seq_len=8, num_episodes=50, rollout_steps=100, patience=2000, discount=0.9,
+                            actor_learning_rate=1e-3, critic_learning_rate=1e-3, entropy_factor=1e-4, hidden_size=256, num_team1=3, num_team2=2, num_obstacles=2)
     else:
         raise NotImplementedError  
     
@@ -64,19 +66,6 @@ def train(args):
     print("end time: ", datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
 
 
-def multi_train(args):
-    start_time = datetime.datetime.now()
-    hp = make_hp(args)
-    experiment_name = f'{args.env}_{"LSTM" if args.use_lstm else "NoLSTM"}_{"NoVelocity" if args.mask_velocity else "Velocity"}_noise{args.noise}_sample{args.sample}'
-    trainer = MultiTrainer(args.env, experiment_name, hp)
-    team1_score, team2_score = trainer.train()
-    end_time = datetime.datetime.now()
-    print("max reward: ", team1_score, team2_score)
-    print("start time: ", start_time.strftime('%Y-%m-%d %H:%M:%S'))
-    print("spend time: ", (end_time-start_time).seconds / 3600)
-    print("end time: ", datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
-
-
 def test(args):
     start_time = datetime.datetime.now()
     hp = make_hp(args)
@@ -90,6 +79,31 @@ def test(args):
     print("end time: ", datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
 
 
+def multi_train(args):
+    start_time = datetime.datetime.now()
+    hp = make_hp(args)
+    experiment_name = f'{args.env}_{"LSTM" if args.use_lstm else "NoLSTM"}_{"NoVelocity" if args.mask_velocity else "Velocity"}_noise{args.noise}_sample{args.sample}'
+    trainer = MultiTrainer(args.env, experiment_name, hp)
+    team1_score, team2_score = trainer.train()
+    end_time = datetime.datetime.now()
+    print("max reward: ", team1_score, team2_score)
+    print("start time: ", start_time.strftime('%Y-%m-%d %H:%M:%S'))
+    print("spend time: ", (end_time-start_time).seconds / 3600)
+    print("end time: ", datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+
+
+def multi_test(args):
+    start_time = datetime.datetime.now()
+    experiment_name = f'{args.env}_{"LSTM" if args.use_lstm else "NoLSTM"}_{"NoVelocity" if args.mask_velocity else "Velocity"}_noise{args.noise}_sample{args.sample}'
+    tester = MultiTester(args.env, experiment_name)
+    multi_score = tester.test()
+    end_time = datetime.datetime.now()
+    print("max reward: ", multi_score)
+    print("start time: ", start_time.strftime('%Y-%m-%d %H:%M:%S'))
+    print("spend time: ", (end_time-start_time).seconds / 3600)
+    print("end time: ", datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     # parser.add_argument("-e", "--env", type=str, default='simple_tag')
@@ -98,10 +112,11 @@ if __name__ == "__main__":
     parser.add_argument("-n", "--name", type=str, default='experiment')
     parser.add_argument("-R", "--use-lstm", default=True)
     parser.add_argument("-s", "--sample", default=0)
-    parser.add_argument("--noise", type=float, default=0.0)
+    parser.add_argument("--noise", type=float,  default=0.0)
 
     args = parser.parse_args()
 
-    # multi_train(args)
     train(args)
     # test(args)
+    # multi_train(args)
+    # multi_test(args)

@@ -25,11 +25,14 @@ class Critic(nn.Module):
             if terminal is not None:
                 self.hidden_cell = [value * (1. - terminal).reshape(1, batch_size, 1) for value in self.hidden_cell]
             _, self.hidden_cell = self.layer_lstm(state, self.hidden_cell)
-            hidden_out = F.elu(self.layer_hidden(self.hidden_cell[0][-1]))
+            # hidden_out = F.elu(self.layer_hidden(self.hidden_cell[0][-1]))
+            hidden_out = F.tanh(self.layer_hidden(self.hidden_cell[0][-1]))
             value_out = self.layer_value(hidden_out)
         else:
             state = state[-1, :, :]
-            hidden_out = F.elu(self.layer_no_lstm(state))
-            hidden_out = F.elu(self.layer_hidden(hidden_out))
+            # hidden_out = F.elu(self.layer_no_lstm(state))
+            # hidden_out = F.elu(self.layer_hidden(hidden_out))
+            hidden_out = F.tanh(self.layer_no_lstm(state))
+            hidden_out = F.tanh(self.layer_hidden(hidden_out))
             value_out = self.layer_value(hidden_out)
         return value_out
