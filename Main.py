@@ -37,8 +37,7 @@ def make_hp(args) -> HyperParameters:
                             #init_log_std_dev=1., trainable_std_dev=True)
     elif args.env == "BipedalWalkerHardcore-v3" and not args.mask_velocity:
         # Working :-D
-        # TODO, 样本利用率有点低, 最后1.96将将好错过2, 尝试调参
-        hp = HyperParameters(batch_size=1024, parallel_rollouts=16, recurrent_seq_len=8, rollout_steps=1024, patience=5000, entropy_factor=1e-4, 
+        hp = HyperParameters(batch_size=1024, parallel_rollouts=32, recurrent_seq_len=8, rollout_steps=1200, patience=5000, entropy_factor=1e-4,
                             init_log_std_dev=-1., trainable_std_dev=True, min_reward=-1., hidden_size=256)
     elif args.env == "simple_tag":
         # Working :-D
