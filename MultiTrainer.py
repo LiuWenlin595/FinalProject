@@ -4,7 +4,7 @@ import torch
 from torch.nn import functional as F
 from typing import Dict
 import numpy as np
-from pettingzoo.mpe import simple_tag_v2
+from pettingzoo.mpe import simple_tag_v2, simple_world_comm_v2
 
 from MultiLoadAndSave import *
 
@@ -40,8 +40,10 @@ class MultiTrainer:
         self.team2_best_reward = -1e6
         self.fail_to_improve_count = 0  # 没有提升的训练次数
 
-        self.env = simple_tag_v2.parallel_env(num_good=self.hp.num_team2, num_adversaries=self.hp.num_team1, \
-            num_obstacles=self.hp.num_obstacles, max_cycles=self.hp.rollout_steps, continuous_actions=self.continuous_action_space)
+        # self.env = simple_tag_v2.parallel_env(num_good=self.hp.num_team2, num_adversaries=self.hp.num_team1, \
+        #     num_obstacles=self.hp.num_obstacles, max_cycles=self.hp.rollout_steps, continuous_actions=self.continuous_action_space)   
+        self.env = simple_world_comm_v2.parallel_env(num_good=self.hp.num_team2, num_adversaries=self.hp.num_team1, num_obstacles=self.hp.num_obstacles, \
+            num_forests=self.hp.num_forests, num_food=self.hp.num_food, max_cycles=self.hp.rollout_steps, continuous_actions=self.continuous_action_space)
         # self.env = PerturbationWrapper(self.env, hp.noise)
 
         self.writer = SummaryWriter(log_dir=f"{workspace_path}/logs/{experiment_name}")
@@ -129,7 +131,6 @@ class MultiTrainer:
 
     # 矢量化环境执行step, 获取所有子环境的traj
     def gather_trajectories(self) ->  Dict[str, torch.Tensor]:
-        
         # Initialise variables.
         obsv = self.env.reset()
         team1_trajectory_episodes = {"states": [],  # shape = [rollout_steps, parallel_rollouts] 或 [rollout_steps, parallel_rollouts, dim]
@@ -184,6 +185,8 @@ class MultiTrainer:
                 self.team2_critic.get_init_state(self.hp.parallel_rollouts, self.gather_device)
                 # MPE环境一定执行rollout_steps步, 无提前done, 所以一次for循环产生的traj一定是一个完整的episode, 后面也省略了split和pad
                 for t in range(self.hp.rollout_steps):
+                    # self.env.render()
+                    # time.sleep(0.15)
                     for i in range(self.hp.num_team1):
                         trajectory_episodes[i]["actor_hidden_states"].append(self.team1_actor.hidden_cell[0].squeeze(0).squeeze(0).cpu())
                         trajectory_episodes[i]["actor_cell_states"].append(self.team1_actor.hidden_cell[1].squeeze(0).squeeze(0).cpu())
@@ -249,7 +252,7 @@ class MultiTrainer:
                     for key in team2_trajectory_episodes.keys():
                         team2_trajectory_episodes[key].append(torch.stack(trajectory_episodes[i][key]))
                         trajectory_episodes[i][key] = []
-    
+
         return team1_trajectory_episodes, team2_trajectory_episodes  # shape = [episode个数, episode长度, dim]
 
 
@@ -280,7 +283,7 @@ class MultiTrainer:
                                                                         final_value=team2_trajectory_episodes["values"][i][-1]))
         
         team1_trajectories = {k: torch.stack(v).squeeze(-1) for k, v in team1_trajectory_episodes.items()} 
-        team2_trajectories = {k: torch.stack(v) for k, v in team2_trajectory_episodes.items()} 
+        team2_trajectories = {k: torch.stack(v).squeeze(-1) for k, v in team2_trajectory_episodes.items()}
         team1_trajectories["seq_len"] = torch.tensor([self.hp.rollout_steps] * team1_episode_count)
         team2_trajectories["seq_len"] = torch.tensor([self.hp.rollout_steps] * team2_episode_count)
 

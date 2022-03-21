@@ -5,7 +5,7 @@ from typing import Optional
 from dotmap import DotMap
 import pathlib
 import gym
-from pettingzoo.mpe import simple_tag_v2
+from pettingzoo.mpe import simple_tag_v2, simple_world_comm_v2
 
 from Actor import Actor
 from Critic import Critic
@@ -41,7 +41,8 @@ def load_checkpoint(base_checkpoint_path: str, iteration: int, map_loacation: Op
 
 # 得到gym_env的基本状态空间和动作空间
 def get_env_space(env_name: str, hp):
-    env = simple_tag_v2.parallel_env(num_good=hp.num_team2, num_adversaries=hp.num_team1, num_obstacles=hp.num_obstacles, max_cycles=hp.rollout_steps, continuous_actions=False)
+    # env = simple_tag_v2.parallel_env(num_good=hp.num_team2, num_adversaries=hp.num_team1, num_obstacles=hp.num_obstacles, max_cycles=hp.rollout_steps, continuous_actions=False)
+    env = simple_world_comm_v2.parallel_env(num_good=hp.num_team2, num_adversaries=hp.num_team1, num_obstacles=hp.num_obstacles, num_forests=hp.num_forests, num_food=hp.num_food, max_cycles=hp.rollout_steps, continuous_actions=False)
     action_space = env.action_space(env.possible_agents[0])
     continuous_action_space = type(action_space) is gym.spaces.box.Box
     if continuous_action_space:

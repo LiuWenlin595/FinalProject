@@ -2,7 +2,7 @@ from HyperParameter import HyperParameters
 import torch
 import numpy as np
 import time
-from pettingzoo.mpe import simple_tag_v2
+from pettingzoo.mpe import simple_tag_v2, simple_world_comm_v2
 
 from MultiLoadAndSave import *
 
@@ -24,8 +24,10 @@ class MultiTester:
         self.train_device = "cuda:0" if torch.cuda.is_available() else "cpu"
         self.gather_device = "cuda:0" if torch.cuda.is_available() and not force_cpu_gather else "cpu"
 
-        self.env = simple_tag_v2.parallel_env(num_good=self.hp.num_team2, num_adversaries=self.hp.num_team1, \
-            num_obstacles=self.hp.num_obstacles, max_cycles=self.hp.rollout_steps, continuous_actions=self.continuous_action_space)
+        # self.env = simple_tag_v2.parallel_env(num_good=self.hp.num_team2, num_adversaries=self.hp.num_team1, \
+        #     num_obstacles=self.hp.num_obstacles, max_cycles=self.hp.rollout_steps, continuous_actions=self.continuous_action_space)
+        self.env = simple_world_comm_v2.parallel_env(num_good=self.hp.num_team2, num_adversaries=self.hp.num_team1, num_obstacles=self.hp.num_obstacles, \
+            num_forests=self.hp.num_forests, num_food=self.hp.num_food, max_cycles=self.hp.rollout_steps, continuous_actions=self.continuous_action_space)
         # self.env = PerturbationWrapper(self.env, hp.noise)
 
         RANDOM_SEED = 0
@@ -37,7 +39,7 @@ class MultiTester:
     # 通过checkpoint恢复或初始化网络参数
     def start_or_resume_from_checkpoint(self):
         max_checkpoint_iteration = get_last_checkpoint_iteration(self.base_checkpoint_path)
-        max_checkpoint_iteration = 600
+        # max_checkpoint_iteration = 0
         
         if max_checkpoint_iteration <= 0:
             print("找不到checkpoint: ", self.base_checkpoint_path)
@@ -91,7 +93,7 @@ class MultiTester:
                 if terminal:
                     break
                 self.env.render()
-                time.sleep(0.05)
+                time.sleep(0.15)
 
             print(f"Iteration: {k}, reward: {episode_reward}")
             total_reward[k] = episode_reward

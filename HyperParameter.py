@@ -27,6 +27,8 @@ NUM_EPISODES:         int = 1000
 NUM_TEAM1:            int = 1
 NUM_TEAM2:            int = 1
 NUM_OBSTACLES:        int = 2
+NUM_FORESTS:          int = 0
+NUM_FOOD:             int = 2
 
 
 # 修饰数据类, 用于方便整理属性, 避免了init方法等等
@@ -65,3 +67,5 @@ class HyperParameters():
     num_team1:            int = NUM_TEAM1                   # advertory                   
     num_team2:            int = NUM_TEAM2                   # agent
     num_obstacles:        int = NUM_OBSTACLES
+    num_forests:          int = NUM_FORESTS
+    num_food:             int = NUM_FOOD

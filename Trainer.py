@@ -43,7 +43,7 @@ class Trainer:
 
         self.best_reward = -1e6
         self.fail_to_improve_count = 0  # 没有提升的训练次数
-        self.per_threshold = 1000   # 容忍阈值, 需要比patience小
+        self.per_threshold = 500   # 容忍阈值, 需要比patience小
         self.use_per = False    # 达到容忍阈值后应用on policy PER
 
         # 矢量化环境和标准gym环境一大不同就是会自动reset, 所以子环境的done生效时对应的state是reset后的初始状态
