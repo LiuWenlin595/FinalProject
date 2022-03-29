@@ -45,8 +45,8 @@ def make_hp(args) -> HyperParameters:
                             actor_learning_rate=1e-3, critic_learning_rate=1e-3, entropy_factor=1e-4, hidden_size=256, num_team1=3, num_team2=2, num_obstacles=2)
     elif args.env == "simple_world_comm":
         # Working :-D
-        hp = HyperParameters(batch_size=512, parallel_rollouts=1, recurrent_seq_len=8, num_episodes=50, rollout_steps=100, patience=300, discount=0.95,
-                            actor_learning_rate=5e-4, critic_learning_rate=5e-4, entropy_factor=1e-4, hidden_size=256, num_team1=3, num_team2=2, num_obstacles=1, num_forests=0, num_food=2)
+        hp = HyperParameters(batch_size=512, parallel_rollouts=1, recurrent_seq_len=8, num_episodes=50, rollout_steps=100, patience=5000, discount=0.95,
+                            actor_learning_rate=1e-4, critic_learning_rate=1e-4, entropy_factor=1e-4, hidden_size=256, num_team1=3, num_team2=3, num_obstacles=1, num_forests=2, num_food=3)
     else:
         raise NotImplementedError  
     
@@ -66,7 +66,7 @@ def train(args):
     print("max reward: ", score)
     print("start time: ", start_time.strftime('%Y-%m-%d %H:%M:%S'))
     print("spend time: ", (end_time-start_time).seconds / 3600)
-    print("end time: ", datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+    print("end time: ", end_time.strftime('%Y-%m-%d %H:%M:%S'))
 
 
 def test(args):
@@ -79,7 +79,7 @@ def test(args):
     print("test reward: ", score)
     print("start time: ", start_time.strftime('%Y-%m-%d %H:%M:%S'))
     print("spend time: ", (end_time-start_time).seconds / 3600)
-    print("end time: ", datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+    print("end time: ", end_time.strftime('%Y-%m-%d %H:%M:%S'))
 
 
 def multi_train(args):
@@ -92,7 +92,7 @@ def multi_train(args):
     print("max reward: ", team1_score, team2_score)
     print("start time: ", start_time.strftime('%Y-%m-%d %H:%M:%S'))
     print("spend time: ", (end_time-start_time).seconds / 3600)
-    print("end time: ", datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+    print("end time: ", end_time.strftime('%Y-%m-%d %H:%M:%S'))
 
 
 def multi_test(args):
@@ -103,8 +103,9 @@ def multi_test(args):
     end_time = datetime.datetime.now()
     print("max reward: ", multi_score)
     print("start time: ", start_time.strftime('%Y-%m-%d %H:%M:%S'))
+    print("spend time: ", end_time-start_time)
     print("spend time: ", (end_time-start_time).seconds / 3600)
-    print("end time: ", datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+    print("end time: ", end_time.strftime('%Y-%m-%d %H:%M:%S'))
 
 
 if __name__ == "__main__":
@@ -113,7 +114,7 @@ if __name__ == "__main__":
     # parser.add_argument("-e", "--env", type=str, default='BipedalWalkerHardcore-v3')
     parser.add_argument("-m", "--mask-velocity", default=False)
     parser.add_argument("-n", "--name", type=str, default='experiment')
-    parser.add_argument("-R", "--use-lstm", default=False)
+    parser.add_argument("-R", "--use-lstm", default=True)
     parser.add_argument("-s", "--sample", default=0)
     parser.add_argument("--noise", type=float,  default=0.0)
 

@@ -57,7 +57,7 @@ class HyperParameters():
     trainable_std_dev:    bool = TRAINABLE_STD_DEV          # 标准差是否需要梯度
     init_log_std_dev:     float = INIT_LOG_STD_DEV          # 初始标准差的log值
     # 终止条件
-    max_iterations:       int = 1000000                     # 最大训练迭代次数
+    max_iterations:       int = 5000                     # 最大训练迭代次数
     noise:                float = 0.0                       # 对state施加标准正态分布噪声扰动的尺度缩放量
     # 采样方式
     sample:               int = 0                           # 123是reward, 456是delta

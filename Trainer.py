@@ -1,4 +1,5 @@
 from random import sample
+from tracemalloc import start
 from HyperParameter import HyperParameters
 from pickle import DICT
 import torch
@@ -243,11 +244,11 @@ class Trainer:
         start_iteration = -1
         total_episode_count = len(trajectories["terminals"])
         total_episode_idx = None  # minibatch中所有episode根据指标进行idx的由小到大排序
-        if 1 <= self.hp.sample <= 3:
+        if 1 <= self.hp.sample <= 4:
             reward_sum = trajectories["rewards"].sum(axis=1)
             reward_mean = reward_sum / trajectories["seq_len"]
             total_episode_idx = reward_mean.argsort()
-        elif 4 <= self.hp.sample <= 6:
+        elif 5 <= self.hp.sample <= 8:
             # 计算deltas相关
             deltas = trajectories["rewards"] + self.hp.discount * trajectories["values"][:, 1:] - trajectories["values"][:, :-1]
             deltas_abs_sum = torch.maximum(deltas, -deltas).sum(axis=1)
@@ -256,10 +257,10 @@ class Trainer:
             
         # 针对on policy的优先回放
         eps_idx = None
-        if (self.hp.sample == 1 or self.hp.sample == 4) and self.iteration > start_iteration:
+        if (self.hp.sample == 1 or self.hp.sample == 5) and self.iteration > start_iteration:
             eps_idx = total_episode_idx[:int(total_episode_count*belta)]
 
-        elif self.hp.sample == 2 or self.hp.sample == 5:
+        elif self.hp.sample == 2 or self.hp.sample == 6:
             print("alpha: ", alpha, "belta: ", belta)
             sort_num = int(total_episode_count * alpha)
             random_num = total_episode_count - sort_num
@@ -271,7 +272,7 @@ class Trainer:
         elif (self.hp.sample == 3 or self.hp.sample == 7) and self.use_per:
             eps_idx = total_episode_idx[:int(total_episode_count*belta)]
 
-        elif self.hp.sample == 4 or self.hp.sample == 8:
+        elif (self.hp.sample == 4 or self.hp.sample == 8) and self.iteration > start_iteration:
             print("alpha: ", alpha, "belta: ", belta)
             # sort_num = int(total_episode_count * alpha)
             # random_num = total_episode_count - sort_num
