@@ -417,7 +417,7 @@ class MultiTrainer:
             # 采样策略
             if self.hp.sample > 0:
                 team1_trajectories = self.on_policy_priority_sample(team1_trajectories, 20000, -1, self.team1_use_per)
-                team2_trajectories = self.on_policy_priority_sample(team2_trajectories, 20000, -1, self.team1_use_per)
+                team2_trajectories = self.on_policy_priority_sample(team2_trajectories, 20000, -1, self.team2_use_per)
 
             # handle = pynvml.nvmlDeviceGetHandleByIndex(0)
             # info = pynvml.nvmlDeviceGetMemoryInfo(handle)
