@@ -38,7 +38,12 @@ class MultiTrainer:
 
         self.team1_best_reward = -1e6
         self.team2_best_reward = -1e6
-        self.fail_to_improve_count = 0  # 没有提升的训练次数
+        self.team1_fail_to_improve_count = 0  # 没有提升的训练次数
+        self.team2_fail_to_improve_count = 0
+        self.team1_per_threshold = 500
+        self.team2_per_threshold = 500
+        self.team1_use_per = False
+        self.team2_use_per = False
 
         # self.env = simple_tag_v2.parallel_env(num_good=self.hp.num_team2, num_adversaries=self.hp.num_team1, \
         #     num_obstacles=self.hp.num_obstacles, max_cycles=self.hp.rollout_steps, continuous_actions=self.continuous_action_space)   
@@ -290,6 +295,65 @@ class MultiTrainer:
         return team1_trajectories, team2_trajectories   # shape = [episode个数, rollout_steps, dim]
  
 
+    # on policy 优先级经验回放
+    def on_policy_priority_sample(self, trajectories, max_iteration=20000, start_iteration=-1, use_per=False):
+        alpha, belta = min((self.iteration / max_iteration)**2, 1.0), 0.6
+        total_episode_count = len(trajectories["terminals"])
+        total_episode_idx = None  # minibatch中所有episode根据指标进行idx的由小到大排序
+        if 1 <= self.hp.sample <= 4:
+            reward_sum = trajectories["rewards"].sum(axis=1)
+            reward_mean = reward_sum / trajectories["seq_len"]
+            total_episode_idx = reward_mean.argsort()
+        elif 5 <= self.hp.sample <= 8:
+            # 计算deltas相关
+            deltas = trajectories["rewards"] + self.hp.discount * trajectories["values"][:, 1:] - trajectories["values"][:, :-1]
+            deltas_abs_sum = torch.maximum(deltas, -deltas).sum(axis=1)
+            deltas_abs_mean = deltas_abs_sum / trajectories["seq_len"]
+            total_episode_idx = deltas_abs_mean.argsort()
+            
+        # 针对on policy的优先回放
+        eps_idx = None
+        if (self.hp.sample == 1 or self.hp.sample == 5) and self.iteration > start_iteration:
+            eps_idx = total_episode_idx[:int(total_episode_count*belta)]
+
+        elif self.hp.sample == 2 or self.hp.sample == 6:
+            print("alpha: ", alpha, "belta: ", belta)
+            sort_num = int(total_episode_count * alpha)
+            random_num = total_episode_count - sort_num
+            # 从排序好的episode中随机选出random_num个, 并将其从total_episode_idx中去除
+            eps_idx_1 = np.random.choice(total_episode_idx, size=random_num, replace=False)
+            eps_idx_2 = np.setdiff1d(total_episode_idx, eps_idx_1)[:int(sort_num*belta)]
+            eps_idx = np.concatenate((eps_idx_1, eps_idx_2))
+
+        elif (self.hp.sample == 3 or self.hp.sample == 7) and use_per:
+            eps_idx = total_episode_idx[:int(total_episode_count*belta)]
+
+        elif (self.hp.sample == 4 or self.hp.sample == 8) and self.iteration > start_iteration:
+            print("alpha: ", alpha, "belta: ", belta)
+            # sort_num = int(total_episode_count * alpha)
+            # random_num = total_episode_count - sort_num
+            # # 从排序好的episode中随机选出random_num个, 并将其从total_episode_idx中去除
+            # eps_idx_1 = np.random.choice(total_episode_idx, size=random_num, replace=False)
+            # total_episode_idx = np.setdiff1d(total_episode_idx, eps_idx_1)
+            # rank_prob = np.array([1/i for i in range(1, len(total_episode_idx)+1)])
+            # sum_prob = sum(rank_prob)
+            # rank_prob = rank_prob / sum_prob
+            # eps_idx_2 = np.random.choice(total_episode_idx, size=sort_num, replace=False, p=rank_prob)
+            # eps_idx = np.concatenate((eps_idx_1, eps_idx_2))
+            rank_prob = np.array([1/i for i in range(1, len(total_episode_idx)+1)])
+            sum_prob = sum(rank_prob)
+            rank_prob = rank_prob / sum_prob
+            eps_idx = np.random.choice(total_episode_idx, size=int(total_episode_count*belta), replace=False, p=rank_prob)
+
+        # 对于采样出的episode进行提取
+        if eps_idx is not None:
+            print("before sample: ", trajectories["states"].size())
+            for key, value in trajectories.items():
+                trajectories[key] = value[eps_idx]
+            print("after  sample: ", trajectories["states"].size())
+        return trajectories
+
+
     def train(self):
         print(torch.cuda.is_available(), torch.cuda.get_device_name(0))
         while self.iteration < self.hp.max_iterations:      
@@ -310,18 +374,50 @@ class MultiTrainer:
             team2_mean_reward = team2_trajectories["true_rewards"].sum() / team2_episode_count
 
             # 模型收敛停止的条件, 因为是对抗任务, 所以不管是adversory还是agent不增长都可以停止
-            if team1_mean_reward > self.team1_best_reward:
-                self.team1_best_reward = max(self.team1_best_reward, team1_mean_reward)
-                self.fail_to_improve_count = 0
-            elif team2_mean_reward > self.team2_best_reward:
-                self.team2_best_reward = max(self.team2_best_reward, team2_mean_reward)
-                self.fail_to_improve_count = 0
-            else:
-                self.fail_to_improve_count += 1
+            # if team1_mean_reward > self.team1_best_reward:
+            #     self.team1_best_reward = max(self.team1_best_reward, team1_mean_reward)
+            #     self.team1_fail_to_improve_count = 0
+            # elif team2_mean_reward > self.team2_best_reward:
+            #     self.team2_best_reward = max(self.team2_best_reward, team2_mean_reward)
+            #     self.team2_fail_to_improve_count = 0
+            # else:
+            #     self.team1_fail_to_improve_count += 1
             
-            if self.fail_to_improve_count > self.hp.patience:
-                print(f"Policy has not yielded higher reward for {self.hp.patience} iterations...  Stopping now.")
+            # if self.team1_fail_to_improve_count > self.hp.patience:
+            #     print(f"Policy has not yielded higher reward for {self.hp.patience} iterations...  Stopping now.")
+            #     break
+
+            # 模型收敛停止的条件, 因为是对抗任务, 所以不管是adversory还是agent不增长都可以停止
+            if team1_mean_reward > self.team1_best_reward:
+                self.team1_best_reward = team1_mean_reward
+                self.team1_fail_to_improve_count = 0
+            elif self.team1_fail_to_improve_count > self.hp.patience:
+                print(f"Team1 policy has not yielded higher reward for {self.hp.patience} iterations...  Stopping now.")
                 break
+            elif self.team1_fail_to_improve_count > self.team1_per_threshold and not self.team1_use_per:
+                print("team1 use PER iteration: ", self.iteration)
+                self.team1_use_per = True
+                self.team1_fail_to_improve_count = 0  # 重新开始计数
+            else:
+                self.team1_fail_to_improve_count += 1
+
+            if team2_mean_reward > self.team2_best_reward:
+                self.team2_best_reward = team2_mean_reward
+                self.team2_fail_to_improve_count = 0
+            elif self.team2_fail_to_improve_count > self.hp.patience:
+                print(f"Team2 policy has not yielded higher reward for {self.hp.patience} iterations...  Stopping now.")
+                break
+            elif self.team2_fail_to_improve_count > self.team2_per_threshold and not self.team2_use_per:
+                print("team2 use PER iteration: ", self.iteration)
+                self.team2_use_per = True
+                self.team2_fail_to_improve_count = 0  # 重新开始计数
+            else:
+                self.team2_fail_to_improve_count += 1
+            
+            # 采样策略
+            if self.hp.sample > 0:
+                team1_trajectories = self.on_policy_priority_sample(team1_trajectories, 20000, -1, self.team1_use_per)
+                team2_trajectories = self.on_policy_priority_sample(team2_trajectories, 20000, -1, self.team1_use_per)
 
             # handle = pynvml.nvmlDeviceGetHandleByIndex(0)
             # info = pynvml.nvmlDeviceGetMemoryInfo(handle)
