@@ -46,7 +46,7 @@ def make_hp(args) -> HyperParameters:
     elif args.env == "simple_world_comm":
         # Working :-D
         hp = HyperParameters(batch_size=512, parallel_rollouts=1, recurrent_seq_len=8, num_episodes=50, rollout_steps=100, patience=5000, discount=0.95,
-                            actor_learning_rate=1e-4, critic_learning_rate=1e-4, entropy_factor=1e-4, hidden_size=256, num_team1=3, num_team2=3, num_obstacles=1, num_forests=2, num_food=3)
+                            actor_learning_rate=2e-3, critic_learning_rate=2e-3, entropy_factor=1e-4, hidden_size=256, num_team1=3, num_team2=3, num_obstacles=1, num_forests=2, num_food=3)
     else:
         raise NotImplementedError  
     
