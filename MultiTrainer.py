@@ -407,7 +407,7 @@ class MultiTrainer:
             elif self.team2_fail_to_improve_count > self.hp.patience:
                 print(f"Team2 policy has not yielded higher reward for {self.hp.patience} iterations...  Stopping now.")
                 break
-            elif self.team2_fail_to_improve_count > self.team2_per_threshold and not self.team2_use_per:
+            elif self.team2_fail_to_improve_count > self.team2_per_threshold and not self.team2_use_per and self.iteration > 2000:
                 print("team2 use PER iteration: ", self.iteration)
                 self.team2_use_per = True
                 self.team2_fail_to_improve_count = 0  # 重新开始计数
@@ -416,8 +416,8 @@ class MultiTrainer:
             
             # 采样策略
             if self.hp.sample > 0:
-                team1_trajectories = self.on_policy_priority_sample(team1_trajectories, 20000, -1, self.team1_use_per)
-                team2_trajectories = self.on_policy_priority_sample(team2_trajectories, 20000, -1, self.team2_use_per)
+                # team1_trajectories = self.on_policy_priority_sample(team1_trajectories, 20000, -1, self.team1_use_per)
+                team2_trajectories = self.on_policy_priority_sample(team2_trajectories, 10000, -1, self.team2_use_per)
 
             # handle = pynvml.nvmlDeviceGetHandleByIndex(0)
             # info = pynvml.nvmlDeviceGetMemoryInfo(handle)
