@@ -46,9 +46,10 @@ def make_hp(args) -> HyperParameters:
     elif args.env == "simple_world_comm":
         # Working :-D
         hp = HyperParameters(batch_size=512, parallel_rollouts=1, recurrent_seq_len=8, num_episodes=50, rollout_steps=100, patience=5000, discount=0.95,
-                            actor_learning_rate=5e-4, critic_learning_rate=5e-4, entropy_factor=3e-4, hidden_size=256, num_team1=3, num_team2=3, num_obstacles=1, num_forests=2, num_food=3)
+                            team1_actor_rate=4e-4, team1_critic_rate=4e-4, team2_actor_rate=5e-4, team2_critic_rate=5e-4, entropy_factor=3e-4, 
+                            hidden_size=256, num_team1=3, num_team2=3, num_obstacles=1, num_forests=2, num_food=3)
     else:
-        raise NotImplementedError  
+        raise NotImplementedError
     
     hp.use_lstm = args.use_lstm
     hp.noise = args.noise
@@ -71,9 +72,9 @@ def train(args):
 
 def test(args):
     start_time = datetime.datetime.now()
-    hp = make_hp(args)
+    # hp = make_hp(args)
     experiment_name = f'{args.env}_{"LSTM" if args.use_lstm else "NoLSTM"}_{"NoVelocity" if args.mask_velocity else "Velocity"}_noise{args.noise}_sample{args.sample}'
-    tester = Tester(args.env, args.mask_velocity, experiment_name, hp)
+    tester = Tester(args.env, args.mask_velocity, experiment_name) # , hp
     score = tester.test()
     end_time = datetime.datetime.now()
     print("test reward: ", score)
@@ -110,17 +111,17 @@ def multi_test(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("-e", "--env", type=str, default='simple_world_comm')
-    # parser.add_argument("-e", "--env", type=str, default='BipedalWalkerHardcore-v3')
+    # parser.add_argument("-e", "--env", type=str, default='simple_world_comm') 
+    parser.add_argument("-e", "--env", type=str, default='BipedalWalkerHardcore-v3')
     parser.add_argument("-m", "--mask-velocity", default=False)
     parser.add_argument("-n", "--name", type=str, default='experiment')
-    parser.add_argument("-R", "--use-lstm", default=False)
-    parser.add_argument("-s", "--sample", default=7)
+    parser.add_argument("-R", "--use-lstm", default=True) 
+    parser.add_argument("-s", "--sample", default=0) 
     parser.add_argument("--noise", type=float,  default=0.0)
 
     args = parser.parse_args()
-
-    # train(args)
+ 
+    train(args)
     # test(args)
     # multi_train(args)
-    multi_test(args)
+    # multi_test(args)

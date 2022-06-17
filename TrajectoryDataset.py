@@ -9,7 +9,7 @@ class TrajectoryDataset():
     def __init__(self, trajectories, batch_size, device, batch_len, rollout_steps):
         
         self.trajectories = {key: value.to(device) for key, value in trajectories.items()}
-        self.batch_len = batch_len 
+        self.batch_len = batch_len
         # 保证__next__函数中np.linspace收集的batch_len个数据来自同一个episode
         # 不够batch_len长度的episode由于truncated_seq_len == 0, cumsum过程中不会记录该episode起始索引, 所以不会在np.digitize中被选出
         truncated_seq_len = torch.clamp(trajectories["seq_len"] - batch_len + 1, 0, rollout_steps)

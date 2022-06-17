@@ -41,9 +41,10 @@ class MultiTrainer:
         self.team1_fail_to_improve_count = 0  # 没有提升的训练次数
         self.team2_fail_to_improve_count = 0
         self.team1_per_threshold = 500
-        self.team2_per_threshold = 500
+        self.team2_per_threshold = 300
         self.team1_use_per = False
         self.team2_use_per = False
+        self.per_point = 0
 
         # self.env = simple_tag_v2.parallel_env(num_good=self.hp.num_team2, num_adversaries=self.hp.num_team1, \
         #     num_obstacles=self.hp.num_obstacles, max_cycles=self.hp.rollout_steps, continuous_actions=self.continuous_action_space)   
@@ -326,6 +327,7 @@ class MultiTrainer:
             eps_idx = np.concatenate((eps_idx_1, eps_idx_2))
 
         elif (self.hp.sample == 3 or self.hp.sample == 7) and use_per:
+            print("team2 use PER iteration: ", self.per_point)
             eps_idx = total_episode_idx[:int(total_episode_count*belta)]
 
         elif (self.hp.sample == 4 or self.hp.sample == 8) and self.iteration > start_iteration:
@@ -401,15 +403,20 @@ class MultiTrainer:
             else:
                 self.team1_fail_to_improve_count += 1
 
+            if self.iteration == 1200:  # 进入1200重新计数
+                self.team2_fail_to_improve_count = 0
+                self.team2_best_reward = -1e6
+
             if team2_mean_reward > self.team2_best_reward:
                 self.team2_best_reward = team2_mean_reward
                 self.team2_fail_to_improve_count = 0
             elif self.team2_fail_to_improve_count > self.hp.patience:
                 print(f"Team2 policy has not yielded higher reward for {self.hp.patience} iterations...  Stopping now.")
                 break
-            elif self.team2_fail_to_improve_count > self.team2_per_threshold and not self.team2_use_per and self.iteration > 2000:
+            elif self.team2_fail_to_improve_count > self.team2_per_threshold and not self.team2_use_per and self.iteration > 1200:
                 print("team2 use PER iteration: ", self.iteration)
                 self.team2_use_per = True
+                self.per_point = self.iteration  # add, 记录point点
                 self.team2_fail_to_improve_count = 0  # 重新开始计数
             else:
                 self.team2_fail_to_improve_count += 1
@@ -417,7 +424,7 @@ class MultiTrainer:
             # 采样策略
             if self.hp.sample > 0:
                 # team1_trajectories = self.on_policy_priority_sample(team1_trajectories, 20000, -1, self.team1_use_per)
-                team2_trajectories = self.on_policy_priority_sample(team2_trajectories, 10000, -1, self.team2_use_per)
+                team2_trajectories = self.on_policy_priority_sample(team2_trajectories, 5000, 2000, self.team2_use_per)
 
             # handle = pynvml.nvmlDeviceGetHandleByIndex(0)
             # info = pynvml.nvmlDeviceGetMemoryInfo(handle)

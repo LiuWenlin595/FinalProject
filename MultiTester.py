@@ -39,7 +39,7 @@ class MultiTester:
     # 通过checkpoint恢复或初始化网络参数
     def start_or_resume_from_checkpoint(self):
         max_checkpoint_iteration = get_last_checkpoint_iteration(self.base_checkpoint_path)
-        max_checkpoint_iteration = 1340
+        # max_checkpoint_iteration = 3000
         
         if max_checkpoint_iteration <= 0:
             print("找不到checkpoint: ", self.base_checkpoint_path)
@@ -93,7 +93,7 @@ class MultiTester:
                 if terminal:
                     break
                 self.env.render()
-                # time.sleep(0.15)
+                time.sleep(0.15)
 
             print(f"Iteration: {k}, reward: {episode_reward}")
             total_reward[k] = episode_reward

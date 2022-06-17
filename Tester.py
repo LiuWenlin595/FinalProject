@@ -28,7 +28,7 @@ class Tester:
         self.env = gym.make(self.env_name)
         if self.mask_velocity:
             self.env = MaskVelocityWrapper(self.env)
-        self.env = PerturbationWrapper(self.env, hp.noise)
+        self.env = PerturbationWrapper(self.env, self.hp.noise)
 
         RANDOM_SEED = 0
         torch.random.manual_seed(RANDOM_SEED)
